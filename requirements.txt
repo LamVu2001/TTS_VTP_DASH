@@ -1,0 +1,6 @@
+streamlit
+duckdb
+plotly
+pyarrow
+gdown
+streamlit-aggrid
