@@ -91,30 +91,45 @@ def render(file_id: str):
     with of7:
         st.multiselect("TRỌNG LƯỢNG", tl_opts, key="f_tl", placeholder="Tất cả")
 
-    # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI (SỬ DỤNG COUNT DISTINCT MÃ PHIẾU GỬI)
+    # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI
     where_sql_odr = build_where()
 
     res_metrics_odr = con.execute(f"""
         SELECT 
             COUNT(DISTINCT ma_phieugui) AS tong_sl,
             COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) AS sl_ptc,
-            COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1
+            COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1,
+            COUNT(DISTINCT CASE WHEN PTC = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) AS sl_ptc_dung_gio,
+            COUNT(DISTINCT CASE WHEN PTC_1 = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) AS sl_ptc1_dung_gio
         FROM orders 
         WHERE {where_sql_odr}
     """).fetchone()
 
-    tong_sl_odr = res_metrics_odr[0]
-    sl_ptc = res_metrics_odr[1]
-    sl_ptc1 = res_metrics_odr[2]
+    tong_sl_odr = res_metrics_odr[0] or 0
+    sl_ptc = res_metrics_odr[1] or 0
+    sl_ptc1 = res_metrics_odr[2] or 0
+    sl_ptc_dung_gio = res_metrics_odr[3] or 0
+    sl_ptc1_dung_gio = res_metrics_odr[4] or 0
 
+    # Tính toán tỷ lệ %
     pct_ptc = (sl_ptc / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
+    pct_ptc_dung_gio = (sl_ptc_dung_gio / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
+    pct_ptc1_dung_gio = (sl_ptc1_dung_gio / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
 
-    m_odr1, m_odr2, m_odr3, m_odr4 = st.columns(4)
-    with m_odr1: st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHẢI PHÁT</div><div class="metric-value">{tong_sl_odr:,.0f}</div><div class="metric-sub-green">▲ Thực tế</div></div>', unsafe_allow_html=True)
-    with m_odr2: st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC</div><div class="metric-value">{pct_ptc:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
-    with m_odr3: st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC LẦN 1</div><div class="metric-value">{pct_ptc1:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
-    with m_odr4: st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div><div class="metric-value">{pct_ptc:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+    # Hiển thị 5 thẻ KPI dạng cột
+    m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
+    
+    with m_odr1: 
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHẢI PHÁT</div><div class="metric-value">{tong_sl_odr:,.0f}</div><div class="metric-sub-green">▲ Thực tế</div></div>', unsafe_allow_html=True)
+    with m_odr2: 
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC</div><div class="metric-value">{pct_ptc:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+    with m_odr3: 
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC LẦN 1</div><div class="metric-value">{pct_ptc1:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+    with m_odr4: 
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div><div class="metric-value">{pct_ptc_dung_gio:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+    with m_odr5: 
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC LẦN 1 ĐÚNG GIỜ</div><div class="metric-value">{pct_ptc1_dung_gio:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
 
     st.write("")
     
