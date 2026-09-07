@@ -21,6 +21,7 @@ def render(file_id: str):
     if "f_tuyen" not in st.session_state: st.session_state.f_tuyen = []
     if "f_ld" not in st.session_state: st.session_state.f_ld = []
     if "f_tl" not in st.session_state: st.session_state.f_tl = []
+    if "f_tt" not in st.session_state: st.session_state.f_tt = []
 
     # Hàm trợ giúp tạo mệnh đề SQL IN (...) an toàn chống SQL Injection
     def sql_in_clause(column_name, selected_list):
@@ -54,6 +55,9 @@ def render(file_id: str):
         if exclude != "tl":
             c = sql_in_clause("nhom_trong_luong", st.session_state.f_tl)
             if c: conds.append(c)
+        if exclude != "tt":
+            c = sql_in_clause("ma_trangthai", st.session_state.f_tt)
+            if c: conds.append(c)
             
         return " AND ".join(conds)
 
@@ -64,6 +68,7 @@ def render(file_id: str):
     tuyen_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(tuyen AS VARCHAR) FROM orders WHERE {build_where('tuyen')} AND tuyen IS NOT NULL ORDER BY 1").fetchall()]
     ld_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {build_where('ld')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
     tl_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(nhom_trong_luong AS VARCHAR) FROM orders WHERE {build_where('tl')} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
+    tt_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_trangthai AS VARCHAR) FROM orders WHERE {build_where('tt')} AND ma_trangthai IS NOT NULL ORDER BY 1").fetchall()]
 
     # Validate lọc sạch các value cũ không còn nằm trong danh sách tùy chọn mới
     st.session_state.f_tinh = [v for v in st.session_state.f_tinh if v in tinh_opts]
@@ -72,12 +77,13 @@ def render(file_id: str):
     st.session_state.f_tuyen = [v for v in st.session_state.f_tuyen if v in tuyen_opts]
     st.session_state.f_ld = [v for v in st.session_state.f_ld if v in ld_opts]
     st.session_state.f_tl = [v for v in st.session_state.f_tl if v in tl_opts]
+    st.session_state.f_tt = [v for v in st.session_state.f_tt if v in tt_opts]
 
-    # 3. HIỂN THỊ BỘ LỌC NGANG DẠNG MULTI-SELECT (7 Ô LỌC)
-    of1, of2, of3, of4, of5, of6, of7 = st.columns(7)
+    # 3. HIỂN THỊ BỘ LỌC NGANG DẠNG MULTI-SELECT (8 Ô LỌC)
+    of1, of2, of3, of4, of5, of6, of7, of8 = st.columns(8)
 
     with of1:
-        st.date_input("NGÀY", key="f_date")
+        st.date_input("NGÀY PHẢI PHÁT", key="f_date")
     with of2:
         st.multiselect("TỈNH PHÁT", tinh_opts, key="f_tinh", placeholder="Tất cả")
     with of3:
@@ -90,6 +96,8 @@ def render(file_id: str):
         st.multiselect("LOẠI ĐƠN (DV)", ld_opts, key="f_ld", placeholder="Tất cả")
     with of7:
         st.multiselect("TRỌNG LƯỢNG", tl_opts, key="f_tl", placeholder="Tất cả")
+    with of8:
+        st.multiselect("MÃ TRẠNG THÁI", tt_opts, key="f_tt", placeholder="Tất cả")
 
     # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI
     where_sql_odr = build_where()
@@ -111,15 +119,12 @@ def render(file_id: str):
     sl_ptc_dung_gio = res_metrics_odr[3] or 0
     sl_ptc1_dung_gio = res_metrics_odr[4] or 0
 
-    # Tính toán tỷ lệ %
     pct_ptc = (sl_ptc / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
     pct_ptc_dung_gio = (sl_ptc_dung_gio / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
     pct_ptc1_dung_gio = (sl_ptc1_dung_gio / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
 
-    # Hiển thị 5 thẻ KPI dạng cột
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
-    
     with m_odr1: 
         st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHẢI PHÁT</div><div class="metric-value">{tong_sl_odr:,.0f}</div><div class="metric-sub-green">▲ Thực tế</div></div>', unsafe_allow_html=True)
     with m_odr2: 
@@ -133,7 +138,7 @@ def render(file_id: str):
 
     st.write("")
     
-    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG (ĐẾM DISTINCT MÃ PHIẾU GỬI THEO NGÀY PHẢI PHÁT)
+    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG THEO THỜI GIAN PHẢI PHÁT (clean_date)
     c_odr_chart, c_odr_right = st.columns([2, 1.3])
     with c_odr_chart:
         st.subheader("📈 XU HƯỚNG SẢN LƯỢNG PHÁT THÀNH CÔNG")
