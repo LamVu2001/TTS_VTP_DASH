@@ -77,7 +77,7 @@ def render(file_id: str):
     of1, of2, of3, of4, of5, of6, of7 = st.columns(7)
 
     with of1:
-        st.date_input("NGÀY PHẢI PHÁT", key="f_date")
+        st.date_input("NGÀY", key="f_date")
     with of2:
         st.multiselect("TỈNH PHÁT", tinh_opts, key="f_tinh", placeholder="Tất cả")
     with of3:
