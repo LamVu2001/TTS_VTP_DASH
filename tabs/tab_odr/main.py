@@ -20,7 +20,7 @@ def render(file_id: str):
     if "filter_ld" not in st.session_state: st.session_state.filter_ld = "Tất cả"
     if "filter_tl" not in st.session_state: st.session_state.filter_tl = "Tất cả"
 
-    # Hàm xây dựng câu lệnh WHERE dựa trên trạng thái hiện tại (bỏ qua cột đang xét)
+    # Hàm xây dựng câu lệnh WHERE dựa trên trạng thái hiện tại
     def build_where_clause(exclude_field=None):
         conds = ["1=1"]
         if isinstance(st.session_state.filter_date, tuple) and len(st.session_state.filter_date) == 2:
@@ -37,12 +37,19 @@ def render(file_id: str):
             conds.append(f"CAST(nhom_trong_luong AS VARCHAR) = '{st.session_state.filter_tl}'")
         return " AND ".join(conds)
 
-    # Lấy danh sách tùy chọn động (Cross-filtered options)
-    kh_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_khgui AS VARCHAR) FROM orders WHERE {build_where_clause('kh')} AND ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
-    bc_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_buucuc_phat AS VARCHAR) FROM orders WHERE {sql_where := build_where_clause('bc')} AND ma_buucuc_phat IS NOT NULL ORDER BY 1").fetchall()]
-    tuyen_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(tuyen AS VARCHAR) FROM orders WHERE {build_where_clause('tuyen')} AND tuyen IS NOT NULL ORDER BY 1").fetchall()]
-    ld_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {build_where_clause('ld')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
-    tl_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(nhom_trong_luong AS VARCHAR) FROM orders WHERE {build_where_clause('tl')} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
+    # Tách mệnh đề WHERE riêng biệt cho từng trường để tránh lỗi Walrus Operator
+    where_kh = build_where_clause('kh')
+    where_bc = build_where_clause('bc')
+    where_tuyen = build_where_clause('tuyen')
+    where_ld = build_where_clause('ld')
+    where_tl = build_where_clause('tl')
+
+    # Lấy danh sách tùy chọn động sạch sẽ
+    kh_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_khgui AS VARCHAR) FROM orders WHERE {where_kh} AND ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
+    bc_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_buucuc_phat AS VARCHAR) FROM orders WHERE {where_bc} AND ma_buucuc_phat IS NOT NULL ORDER BY 1").fetchall()]
+    tuyen_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(tuyen AS VARCHAR) FROM orders WHERE {where_tuyen} AND tuyen IS NOT NULL ORDER BY 1").fetchall()]
+    ld_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {where_ld} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
+    tl_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(nhom_trong_luong AS VARCHAR) FROM orders WHERE {where_tl} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
 
     # Validate lại giá trị nếu danh sách sau khi filter không còn chứa value cũ
     val_kh = st.session_state.filter_kh if st.session_state.filter_kh in kh_opts else "Tất cả"
