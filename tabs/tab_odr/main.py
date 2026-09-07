@@ -47,7 +47,7 @@ def render(file_id: str):
     if st.session_state.f_ld not in ld_opts: st.session_state.f_ld = "Tất cả"
     if st.session_state.f_tl not in tl_opts: st.session_state.f_tl = "Tất cả"
 
-    # 3. HIỂN THỊ BỘ LỌC NGANG TRỰC TIẾP (CHỌN LÀ TỰ ĐỘNG CHẠY)
+    # 3. HIỂN THỊ BỘ LỌC NGANG TRỰC TIẾP (AUTO CROSS-FILTER)
     of1, of2, of3, of4, of5, of6 = st.columns(6)
 
     with of1:
@@ -63,7 +63,7 @@ def render(file_id: str):
     with of6:
         st.selectbox("TRỌNG LƯỢNG", tl_opts, key="f_tl")
 
-    # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN
+    # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI
     where_sql_odr = build_where()
 
     res_metrics_odr = con.execute(f"""
@@ -90,32 +90,57 @@ def render(file_id: str):
 
     st.write("")
     
-    # Biểu đồ xu hướng sản lượng 7 ngày
+    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG THEO THỜI GIAN PTC
     c_odr_chart, c_odr_right = st.columns([2, 1.3])
     with c_odr_chart:
-        st.subheader("📈 XU HƯỚNG SẢN LƯỢNG PHÁT 7 NGÀY GẦN NHẤT")
+        st.subheader("📈 XU HƯỚNG SẢN LƯỢNG PHÁT THÀNH CÔNG")
         try:
+            where_chart_conds = ["PTC = 1"]
+            if st.session_state.f_kh != "Tất cả": where_chart_conds.append(f"CAST(ma_khgui AS VARCHAR) = '{st.session_state.f_kh}'")
+            if st.session_state.f_bc != "Tất cả": where_chart_conds.append(f"CAST(ma_buucuc_phat AS VARCHAR) = '{st.session_state.f_bc}'")
+            if st.session_state.f_tuyen != "Tất cả": where_chart_conds.append(f"CAST(tuyen AS VARCHAR) = '{st.session_state.f_tuyen}'")
+            if st.session_state.f_ld != "Tất cả": where_chart_conds.append(f"CAST(ma_dv_viettel AS VARCHAR) = '{st.session_state.f_ld}'")
+            if st.session_state.f_tl != "Tất cả": where_chart_conds.append(f"CAST(nhom_trong_luong AS VARCHAR) = '{st.session_state.f_tl}'")
+            
+            if isinstance(st.session_state.f_date, tuple) and len(st.session_state.f_date) == 2:
+                start_d, end_d = st.session_state.f_date[0], st.session_state.f_date[1]
+                where_chart_conds.append(f"clean_date_ptc BETWEEN '{start_d}' AND '{end_d}'")
+                
+            where_chart_sql = " AND ".join(where_chart_conds)
+
             df_odr_daily = con.execute(f"""
-                SELECT clean_date as ngay, COUNT(*) as SanLuong 
-                FROM orders WHERE {where_sql_odr} AND clean_date IS NOT NULL 
-                GROUP BY ngay ORDER BY ngay DESC LIMIT 7
+                SELECT 
+                    clean_date_ptc as ngay_ptc, 
+                    COUNT(*) as SanLuongPTC 
+                FROM orders 
+                WHERE {where_chart_sql} AND clean_date_ptc IS NOT NULL 
+                GROUP BY ngay_ptc 
+                ORDER BY ngay_ptc ASC
             """).fetchdf()
+
             if len(df_odr_daily) > 0:
-                df_odr_daily = df_odr_daily.sort_values("ngay")
-                fig_odr = px.line(df_odr_daily, x="ngay", y="SanLuong", markers=True)
+                fig_odr = px.line(df_odr_daily, x="ngay_ptc", y="SanLuongPTC", markers=True)
                 fig_odr.update_traces(line=dict(color="#c62828", width=2.5), marker=dict(size=6, color="#c62828"))
-                fig_odr.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10), yaxis_title=None, xaxis_title=None)
+                fig_odr.update_layout(
+                    height=380, 
+                    margin=dict(l=10, r=10, t=10, b=10), 
+                    yaxis_title=None, 
+                    xaxis_title=None,
+                    xaxis=dict(type='category')
+                )
                 st.plotly_chart(fig_odr, use_container_width=True)
-        except Exception:
-            pass
+            else:
+                st.warning("Không có dữ liệu phát thành công trong khoảng thời gian đã chọn.")
+        except Exception as e:
+            st.error(f"Lỗi tính toán biểu đồ: {e}")
 
     with c_odr_right:
         st.subheader("💡 THÔNG TIN TỔNG QUAN ODR")
-        st.info("Biểu đồ bên trái thể hiện sản lượng đơn hàng thực tế cần phát trong 7 ngày gần nhất dựa trên bộ lọc hiện tại của bạn.")
+        st.info("Biểu đồ bên trái thể hiện sản lượng đơn phát thành công thực tế theo ngày phát thành công (ngay_phat_cuoi_cung) trong khoảng thời gian đã chọn.")
 
     st.divider()
 
-    # Bảng tương tác Tỉnh phát / Bưu cục phát
+    # 6. BẢNG TƯƠNG TÁC TỈNH PHÁT / BƯU CỤC PHÁT
     st.markdown('<p class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC PHÁT (BẤM CHỌN DÒNG CHI NHÁNH BÊN TRÁI ĐỂ LỌC BƯU CỤC BÊN PHẢI)</p>', unsafe_allow_html=True)
 
     cn_data_raw = con.execute(f"""
@@ -191,7 +216,7 @@ def render(file_id: str):
 
     st.divider()
 
-    # Báo cáo Ma Trận Vận Hành Cây 3 cấp
+    # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     days_data = con.execute(f"SELECT clean_date, COUNT(*) as sl FROM orders WHERE {where_sql_odr} AND clean_date IS NOT NULL GROUP BY clean_date ORDER BY clean_date DESC LIMIT 7").fetchall()
@@ -337,7 +362,7 @@ def render(file_id: str):
     """
     components.html(matrix_full_html, height=480, scrolling=True)
 
-    # Ba Bảng Tồn Khâu
+    # 8. BA BẢNG TỒN KHÂU (FM, MM, LM)
     ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(*) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
 
     tinh_tree = {}
