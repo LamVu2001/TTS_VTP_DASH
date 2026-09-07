@@ -8,106 +8,64 @@ def render(file_id: str):
 
     con = get_odr_db(file_id)
 
-    # ---------------------------------------------------------
-    # 1. KHO BỘ LỌC CROSS-FILTERING TỐI ƯU BẰNG DUCKDB
-    # ---------------------------------------------------------
-    
-    # Khởi tạo trạng thái lưu giá trị filter trong Session State nếu chưa có
-    if "filter_date" not in st.session_state: st.session_state.filter_date = ()
-    if "filter_kh" not in st.session_state: st.session_state.filter_kh = "Tất cả"
-    if "filter_bc" not in st.session_state: st.session_state.filter_bc = "Tất cả"
-    if "filter_tuyen" not in st.session_state: st.session_state.filter_tuyen = "Tất cả"
-    if "filter_ld" not in st.session_state: st.session_state.filter_ld = "Tất cả"
-    if "filter_tl" not in st.session_state: st.session_state.filter_tl = "Tất cả"
+    # 1. KHỞI TẠO STATE BAN ĐẦU NẾU CHƯA CÓ
+    if "f_date" not in st.session_state: st.session_state.f_date = ()
+    if "f_kh" not in st.session_state: st.session_state.f_kh = "Tất cả"
+    if "f_bc" not in st.session_state: st.session_state.f_bc = "Tất cả"
+    if "f_tuyen" not in st.session_state: st.session_state.f_tuyen = "Tất cả"
+    if "f_ld" not in st.session_state: st.session_state.f_ld = "Tất cả"
+    if "f_tl" not in st.session_state: st.session_state.f_tl = "Tất cả"
 
-    # Hàm xây dựng câu lệnh WHERE dựa trên trạng thái hiện tại
-    def build_where_clause(exclude_field=None):
+    # Hàm dựng câu lệnh WHERE lọc theo ngày ngay_bat_dau_phai_phat và các widget
+    def build_where(exclude=None):
         conds = ["1=1"]
-        if isinstance(st.session_state.filter_date, tuple) and len(st.session_state.filter_date) == 2:
-            conds.append(f"clean_date BETWEEN '{st.session_state.filter_date[0]}' AND '{st.session_state.filter_date[1]}'")
-        if exclude_field != "kh" and st.session_state.filter_kh != "Tất cả":
-            conds.append(f"CAST(ma_khgui AS VARCHAR) = '{st.session_state.filter_kh}'")
-        if exclude_field != "bc" and st.session_state.filter_bc != "Tất cả":
-            conds.append(f"CAST(ma_buucuc_phat AS VARCHAR) = '{st.session_state.filter_bc}'")
-        if exclude_field != "tuyen" and st.session_state.filter_tuyen != "Tất cả":
-            conds.append(f"CAST(tuyen AS VARCHAR) = '{st.session_state.filter_tuyen}'")
-        if exclude_field != "ld" and st.session_state.filter_ld != "Tất cả":
-            conds.append(f"CAST(ma_dv_viettel AS VARCHAR) = '{st.session_state.filter_ld}'")
-        if exclude_field != "tl" and st.session_state.filter_tl != "Tất cả":
-            conds.append(f"CAST(nhom_trong_luong AS VARCHAR) = '{st.session_state.filter_tl}'")
+        if isinstance(st.session_state.f_date, tuple) and len(st.session_state.f_date) == 2:
+            conds.append(f"clean_date BETWEEN '{st.session_state.f_date[0]}' AND '{st.session_state.f_date[1]}'")
+        if exclude != "kh" and st.session_state.f_kh != "Tất cả":
+            conds.append(f"CAST(ma_khgui AS VARCHAR) = '{st.session_state.f_kh}'")
+        if exclude != "bc" and st.session_state.f_bc != "Tất cả":
+            conds.append(f"CAST(ma_buucuc_phat AS VARCHAR) = '{st.session_state.f_bc}'")
+        if exclude != "tuyen" and st.session_state.f_tuyen != "Tất cả":
+            conds.append(f"CAST(tuyen AS VARCHAR) = '{st.session_state.f_tuyen}'")
+        if exclude != "ld" and st.session_state.f_ld != "Tất cả":
+            conds.append(f"CAST(ma_dv_viettel AS VARCHAR) = '{st.session_state.f_ld}'")
+        if exclude != "tl" and st.session_state.f_tl != "Tất cả":
+            conds.append(f"CAST(nhom_trong_luong AS VARCHAR) = '{st.session_state.f_tl}'")
         return " AND ".join(conds)
 
-    # Tách mệnh đề WHERE riêng biệt cho từng trường để tránh lỗi Walrus Operator
-    where_kh = build_where_clause('kh')
-    where_bc = build_where_clause('bc')
-    where_tuyen = build_where_clause('tuyen')
-    where_ld = build_where_clause('ld')
-    where_tl = build_where_clause('tl')
+    # 2. LẤY DANH SÁCH TỰ ĐỘNG THEO DỮ LIỆU CROSS-FILTER
+    kh_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_khgui AS VARCHAR) FROM orders WHERE {build_where('kh')} AND ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
+    bc_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_buucuc_phat AS VARCHAR) FROM orders WHERE {build_where('bc')} AND ma_buucuc_phat IS NOT NULL ORDER BY 1").fetchall()]
+    tuyen_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(tuyen AS VARCHAR) FROM orders WHERE {build_where('tuyen')} AND tuyen IS NOT NULL ORDER BY 1").fetchall()]
+    ld_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {build_where('ld')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
+    tl_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(nhom_trong_luong AS VARCHAR) FROM orders WHERE {build_where('tl')} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
 
-    # Lấy danh sách tùy chọn động sạch sẽ
-    kh_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_khgui AS VARCHAR) FROM orders WHERE {where_kh} AND ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
-    bc_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_buucuc_phat AS VARCHAR) FROM orders WHERE {where_bc} AND ma_buucuc_phat IS NOT NULL ORDER BY 1").fetchall()]
-    tuyen_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(tuyen AS VARCHAR) FROM orders WHERE {where_tuyen} AND tuyen IS NOT NULL ORDER BY 1").fetchall()]
-    ld_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {where_ld} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
-    tl_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(nhom_trong_luong AS VARCHAR) FROM orders WHERE {where_tl} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
+    # Kiểm tra an toàn giá trị chọn
+    if st.session_state.f_kh not in kh_opts: st.session_state.f_kh = "Tất cả"
+    if st.session_state.f_bc not in bc_opts: st.session_state.f_bc = "Tất cả"
+    if st.session_state.f_tuyen not in tuyen_opts: st.session_state.f_tuyen = "Tất cả"
+    if st.session_state.f_ld not in ld_opts: st.session_state.f_ld = "Tất cả"
+    if st.session_state.f_tl not in tl_opts: st.session_state.f_tl = "Tất cả"
 
-    # Validate lại giá trị nếu danh sách sau khi filter không còn chứa value cũ
-    val_kh = st.session_state.filter_kh if st.session_state.filter_kh in kh_opts else "Tất cả"
-    val_bc = st.session_state.filter_bc if st.session_state.filter_bc in bc_opts else "Tất cả"
-    val_tuyen = st.session_state.filter_tuyen if st.session_state.filter_tuyen in tuyen_opts else "Tất cả"
-    val_ld = st.session_state.filter_ld if st.session_state.filter_ld in ld_opts else "Tất cả"
-    val_tl = st.session_state.filter_tl if st.session_state.filter_tl in tl_opts else "Tất cả"
+    # 3. HIỂN THỊ BỘ LỌC NGANG TRỰC TIẾP (CHỌN LÀ TỰ ĐỘNG CHẠY)
+    of1, of2, of3, of4, of5, of6 = st.columns(6)
 
-    # ---------------------------------------------------------
-    # 2. GIAO DIỆN BỘ LỌC NGANG CHUẨN ĐẸP (SỬ DỤNG FORM BẢO VỆ UI)
-    # ---------------------------------------------------------
-    with st.form(key="filter_form"):
-        of1, of2, of3, of4, of5, of6 = st.columns(6)
+    with of1:
+        st.date_input("NGÀY (NGÀY BẮT ĐẦU PHẢI PHÁT)", key="f_date")
+    with of2:
+        st.selectbox("MÃ KHÁCH HÀNG", kh_opts, key="f_kh")
+    with of3:
+        st.selectbox("MÃ BƯU CỤC PHÁT", bc_opts, key="f_bc")
+    with of4:
+        st.selectbox("TUYẾN", tuyen_opts, key="f_tuyen")
+    with of5:
+        st.selectbox("LOẠI ĐƠN (MÃ DV)", ld_opts, key="f_ld")
+    with of6:
+        st.selectbox("TRỌNG LƯỢNG", tl_opts, key="f_tl")
 
-        with of1:
-            input_date = st.date_input("NGÀY", value=st.session_state.filter_date)
-        with of2:
-            input_kh = st.selectbox("MÃ KHÁCH HÀNG", kh_opts, index=kh_opts.index(val_kh))
-        with of3:
-            input_bc = st.selectbox("MÃ BƯU CỤC PHÁT", bc_opts, index=bc_opts.index(val_bc))
-        with of4:
-            input_tuyen = st.selectbox("TUYẾN", tuyen_opts, index=tuyen_opts.index(val_tuyen))
-        with of5:
-            input_ld = st.selectbox("LOẠI ĐƠN (MÃ DV)", ld_opts, index=ld_opts.index(val_ld))
-        with of6:
-            input_tl = st.selectbox("TRỌNG LƯỢNG", tl_opts, index=tl_opts.index(val_tl))
+    # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN
+    where_sql_odr = build_where()
 
-        c_btn1, c_btn2, _ = st.columns([1, 1, 6])
-        with c_btn1:
-            btn_apply = st.form_submit_button("🔍 ÁP DỤNG LỌC", use_container_width=True)
-        with c_btn2:
-            btn_reset = st.form_submit_button("🔄 XÓA LỌC", use_container_width=True)
-
-    # Cập nhật trạng thái khi bấm nút
-    if btn_apply:
-        st.session_state.filter_date = input_date
-        st.session_state.filter_kh = input_kh
-        st.session_state.filter_bc = input_bc
-        st.session_state.filter_tuyen = input_tuyen
-        st.session_state.filter_ld = input_ld
-        st.session_state.filter_tl = input_tl
-        st.rerun()
-
-    if btn_reset:
-        st.session_state.filter_date = ()
-        st.session_state.filter_kh = "Tất cả"
-        st.session_state.filter_bc = "Tất cả"
-        st.session_state.filter_tuyen = "Tất cả"
-        st.session_state.filter_ld = "Tất cả"
-        st.session_state.filter_tl = "Tất cả"
-        st.rerun()
-
-    # ---------------------------------------------------------
-    # 3. TRUY VẤN DỮ LIỆU BÁO CÁO THEO BỘ LỌC HIỆN TẠI
-    # ---------------------------------------------------------
-    where_sql_odr = build_where_clause()
-
-    # 4 Ô KPI CHÍNH (Đã bỏ Đơn tồn quá hạn)
     res_metrics_odr = con.execute(f"""
         SELECT 
             COUNT(*) AS tong_sl,
@@ -157,9 +115,7 @@ def render(file_id: str):
 
     st.divider()
 
-    # ---------------------------------------------------------
-    # 4. BẢNG TƯƠNG TÁC TỈNH PHÁT & BƯU CỤC PHÁT
-    # ---------------------------------------------------------
+    # Bảng tương tác Tỉnh phát / Bưu cục phát
     st.markdown('<p class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC PHÁT (BẤM CHỌN DÒNG CHI NHÁNH BÊN TRÁI ĐỂ LỌC BƯU CỤC BÊN PHẢI)</p>', unsafe_allow_html=True)
 
     cn_data_raw = con.execute(f"""
@@ -235,9 +191,7 @@ def render(file_id: str):
 
     st.divider()
 
-    # ---------------------------------------------------------
-    # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH
-    # ---------------------------------------------------------
+    # Báo cáo Ma Trận Vận Hành Cây 3 cấp
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     days_data = con.execute(f"SELECT clean_date, COUNT(*) as sl FROM orders WHERE {where_sql_odr} AND clean_date IS NOT NULL GROUP BY clean_date ORDER BY clean_date DESC LIMIT 7").fetchall()
@@ -383,9 +337,7 @@ def render(file_id: str):
     """
     components.html(matrix_full_html, height=480, scrolling=True)
 
-    # ---------------------------------------------------------
-    # 6. BA BẢNG TỒN KHÂU (FM, MM, LM)
-    # ---------------------------------------------------------
+    # Ba Bảng Tồn Khâu
     ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(*) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
 
     tinh_tree = {}
