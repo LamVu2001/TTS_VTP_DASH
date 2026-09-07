@@ -14,7 +14,7 @@ def get_odr_db(file_id: str = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"):
 
     con = duckdb.connect(database=':memory:')
     
-    # Xử lý ép kiểu ngày an toàn theo cả dạng DATE gốc lẫn dạng STRING (DD/MM/YYYY hoặc YYYY-MM-DD)
+    # Xử lý ép kiểu ngày an toàn cho ngay_bat_dau_phai_phat và ngay_phat_cuoi_cung
     con.execute(f"""
         CREATE VIEW orders AS 
         SELECT *, 
@@ -22,7 +22,12 @@ def get_odr_db(file_id: str = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"):
                    TRY_CAST(ngay_bat_dau_phai_phat AS DATE),
                    TRY_CAST(STRPTIME(CAST(ngay_bat_dau_phai_phat AS VARCHAR), '%d/%m/%Y') AS DATE),
                    TRY_CAST(STRPTIME(CAST(ngay_bat_dau_phai_phat AS VARCHAR), '%Y-%m-%d') AS DATE)
-               ) as clean_date
-        FROM read_parquet('{local_file}')
+               ) as clean_date,
+               COALESCE(
+                   TRY_CAST(ngay_phat_cuoi_cung AS DATE),
+                   TRY_CAST(STRPTIME(CAST(ngay_phat_cuoi_cung AS VARCHAR), '%d/%m/%Y') AS DATE),
+                   TRY_CAST(STRPTIME(CAST(ngay_phat_cuoi_cung AS VARCHAR), '%Y-%m-%d') AS DATE)
+               ) as clean_date_ptc
+        FROM read_parquet('{local_file}', ignore_errors=true)
     """)
     return con
