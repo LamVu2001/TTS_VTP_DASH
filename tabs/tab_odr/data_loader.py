@@ -14,10 +14,15 @@ def get_odr_db(file_id: str = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"):
 
     con = duckdb.connect(database=':memory:')
     
+    # Xử lý ép kiểu ngày an toàn theo cả dạng DATE gốc lẫn dạng STRING (DD/MM/YYYY hoặc YYYY-MM-DD)
     con.execute(f"""
         CREATE VIEW orders AS 
         SELECT *, 
-               TRY_CAST(ngay_bat_dau_phai_phat AS DATE) as clean_date
+               COALESCE(
+                   TRY_CAST(ngay_bat_dau_phai_phat AS DATE),
+                   TRY_CAST(STRPTIME(CAST(ngay_bat_dau_phai_phat AS VARCHAR), '%d/%m/%Y') AS DATE),
+                   TRY_CAST(STRPTIME(CAST(ngay_bat_dau_phai_phat AS VARCHAR), '%Y-%m-%d') AS DATE)
+               ) as clean_date
         FROM read_parquet('{local_file}')
     """)
     return con
