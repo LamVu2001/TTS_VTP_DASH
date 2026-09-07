@@ -23,7 +23,7 @@ def get_odr_db(file_id: str):
                    TRY_CAST(STRPTIME(REGEXP_REPLACE(SPLIT_PART(TRIM(CAST(tg_quydinhphat AS VARCHAR)), ' ', 1), '[/]', '-', 'g'), '%d-%m-%Y') AS DATE),
                    TRY_CAST(STRPTIME(REGEXP_REPLACE(SPLIT_PART(TRIM(CAST(tg_quydinhphat AS VARCHAR)), ' ', 1), '[/]', '-', 'g'), '%Y-%m-%d') AS DATE)
                ) as clean_date
-        FROM read_parquet('{local_file}', ignore_errors=true)
+        FROM read_parquet('{local_file}')
     """)
     return con
 
