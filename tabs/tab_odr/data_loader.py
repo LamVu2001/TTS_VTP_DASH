@@ -4,7 +4,7 @@ from pathlib import Path
 import gdown
 
 @st.cache_resource
-def get_odr_db(file_id: str):
+def get_odr_db(file_id: str = "1-Wjf_aAvxCQfIfNMBYNGJZZZm60P_Tag"):
     local_file = Path("TTS_phat_data.parquet")
 
     if not local_file.exists():
@@ -14,16 +14,15 @@ def get_odr_db(file_id: str):
 
     con = duckdb.connect(database=':memory:')
     
-    # Ép kiểu an toàn dữ liệu Datetime/Date tránh lỗi bối cảnh schema
+    # Cột ngày chính là ngay_bat_dau_phai_phat (hoặc ngay_trong_khoang) có sẵn kiểu Date
     con.execute(f"""
         CREATE VIEW orders AS 
         SELECT *, 
                COALESCE(
-                   TRY_CAST(CAST(tg_quydinhphat AS TIMESTAMP) AS DATE),
-                   TRY_CAST(STRPTIME(REGEXP_REPLACE(SPLIT_PART(TRIM(CAST(tg_quydinhphat AS VARCHAR)), ' ', 1), '[/]', '-', 'g'), '%d-%m-%Y') AS DATE),
-                   TRY_CAST(STRPTIME(REGEXP_REPLACE(SPLIT_PART(TRIM(CAST(tg_quydinhphat AS VARCHAR)), ' ', 1), '[/]', '-', 'g'), '%Y-%m-%d') AS DATE)
+                   TRY_CAST(ngay_bat_dau_phai_phat AS DATE),
+                   TRY_CAST(ngay_trong_khoang AS DATE)
                ) as clean_date
-        FROM read_parquet('{local_file}')
+        FROM read_parquet('{local_file}', ignore_errors=true)
     """)
     return con
 
