@@ -56,7 +56,7 @@ def render(file_id: str):
     of1, of2, of3, of4, of5, of6 = st.columns(6)
 
     with of1:
-        st.date_input("NGÀY (NGÀY BẮT ĐẦU PHẢI PHÁT)", key="f_date")
+        st.date_input("NGÀY", key="f_date")
     with of2:
         st.selectbox("MÃ KHÁCH HÀNG", kh_opts, key="f_kh")
     with of3:
