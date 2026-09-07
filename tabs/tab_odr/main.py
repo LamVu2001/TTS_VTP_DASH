@@ -1,46 +1,120 @@
 import streamlit as st
 import plotly.express as px
 import streamlit.components.v1 as components
-from .data_loader import get_odr_db, get_odr_filter_options
+from .data_loader import get_odr_db
 
 def render(file_id: str):
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
 
     con = get_odr_db(file_id)
-    kh_list, dt_list = get_odr_filter_options(con)
 
-    # 1. Bộ lọc ngang
+    # Khởi tạo session state lưu vết các bộ lọc nếu chưa có
+    if "odr_date" not in st.session_state: st.session_state.odr_date = ()
+    if "odr_kh" not in st.session_state: st.session_state.odr_kh = "Tất cả"
+    if "odr_bc" not in st.session_state: st.session_state.odr_bc = "Tất cả"
+    if "odr_tuyen" not in st.session_state: st.session_state.odr_tuyen = "Tất cả"
+    if "odr_ld" not in st.session_state: st.session_state.odr_ld = "Tất cả"
+    if "odr_tl" not in st.session_state: st.session_state.odr_tl = "Tất cả"
+
+    # --- HÀM TÍNH TOÁN CROSS-FILTER DYNAMIC OPTIONS ---
+    def get_dynamic_options(exclude_col=None):
+        where_conds = ["1=1"]
+        if isinstance(st.session_state.odr_date, tuple) and len(st.session_state.odr_date) == 2:
+            where_conds.append(f"clean_date BETWEEN '{st.session_state.odr_date[0]}' AND '{st.session_state.odr_date[1]}'")
+        if exclude_col != "ma_khgui" and st.session_state.odr_kh != "Tất cả":
+            where_conds.append(f"CAST(ma_khgui AS VARCHAR) = '{st.session_state.odr_kh}'")
+        if exclude_col != "ma_buucuc_phat" and st.session_state.odr_bc != "Tất cả":
+            where_conds.append(f"CAST(ma_buucuc_phat AS VARCHAR) = '{st.session_state.odr_bc}'")
+        if exclude_col != "tuyen" and st.session_state.odr_tuyen != "Tất cả":
+            where_conds.append(f"CAST(tuyen AS VARCHAR) = '{st.session_state.odr_tuyen}'")
+        if exclude_col != "ma_dv_viettel" and st.session_state.odr_ld != "Tất cả":
+            where_conds.append(f"CAST(ma_dv_viettel AS VARCHAR) = '{st.session_state.odr_ld}'")
+        if exclude_col != "nhom_trong_luong" and st.session_state.odr_tl != "Tất cả":
+            where_conds.append(f"CAST(nhom_trong_luong AS VARCHAR) = '{st.session_state.odr_tl}'")
+
+        sql_where = " AND ".join(where_conds)
+
+        kh_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_khgui AS VARCHAR) FROM orders WHERE {sql_where} AND ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
+        bc_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_buucuc_phat AS VARCHAR) FROM orders WHERE {sql_where} AND ma_buucuc_phat IS NOT NULL ORDER BY 1").fetchall()]
+        tuyen_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(tuyen AS VARCHAR) FROM orders WHERE {sql_where} AND tuyen IS NOT NULL ORDER BY 1").fetchall()]
+        ld_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {sql_where} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
+        tl_opts = ["Tất cả"] + [r[0] for r in con.execute(f"SELECT DISTINCT CAST(nhom_trong_luong AS VARCHAR) FROM orders WHERE {sql_where} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
+
+        return kh_opts, bc_opts, tuyen_opts, ld_opts, tl_opts
+
+    # Lấy danh sách khả dụng theo Cross-Filter
+    kh_options, bc_options, tuyen_options, ld_options, tl_options = get_dynamic_options()
+
+    # Xử lý giữ giá trị đang chọn nếu còn hợp lệ trong danh sách mới
+    def validate_selection(current_val, options_list):
+        return current_val if current_val in options_list else "Tất cả"
+
+    # 1. BỘ LỌC NGANG INTERACTIVE (CROSS-FILTERING)
     of1, of2, of3, of4, of5, of6 = st.columns(6)
-    with of1: filter_date_odr = st.date_input("NGÀY", value=(), key="odr_date")
-    with of2: filter_kh_odr = st.selectbox("MÃ KHÁCH HÀNG", kh_list, key="odr_kh")
-    with of3: filter_dt_odr = st.selectbox("MÃ ĐỐI TÁC", dt_list, key="odr_dt")
-    with of4: filter_kh2_odr = st.selectbox("MÃ KHÁCH HÀNG (2)", kh_list, key="odr_kh2")
-    with of5: filter_ld_odr = st.selectbox("LOẠI ĐƠN", ["Tất cả"], key="odr_ld")
-    with of6: filter_tl_odr = st.selectbox("TRỌNG LƯỢNG", ["Tất cả", "< 500g", "500g - 2kg", "> 2kg"], key="odr_tl")
 
+    with of1:
+        st.date_input("NGÀY", value=st.session_state.odr_date, key="odr_date")
+
+    with of2:
+        kh_opts, _, _, _, _ = get_dynamic_options(exclude_col="ma_khgui")
+        st.selectbox("MÃ KHÁCH HÀNG", kh_opts, index=kh_opts.index(validate_selection(st.session_state.odr_kh, kh_opts)), key="odr_kh")
+
+    with of3:
+        _, bc_opts, _, _, _ = get_dynamic_options(exclude_col="ma_buucuc_phat")
+        st.selectbox("MÃ BƯU CỤC PHÁT", bc_opts, index=bc_opts.index(validate_selection(st.session_state.odr_bc, bc_opts)), key="odr_bc")
+
+    with of4:
+        _, _, tuyen_opts, _, _ = get_dynamic_options(exclude_col="tuyen")
+        st.selectbox("TUYẾN", tuyen_opts, index=tuyen_opts.index(validate_selection(st.session_state.odr_tuyen, tuyen_opts)), key="odr_tuyen")
+
+    with of5:
+        _, _, _, ld_opts, _ = get_dynamic_options(exclude_col="ma_dv_viettel")
+        st.selectbox("LOẠI ĐƠN (MÃ DV)", ld_opts, index=ld_opts.index(validate_selection(st.session_state.odr_ld, ld_opts)), key="odr_ld")
+
+    with of6:
+        _, _, _, _, tl_opts = get_dynamic_options(exclude_col="nhom_trong_luong")
+        st.selectbox("TRỌNG LƯỢNG", tl_opts, index=tl_opts.index(validate_selection(st.session_state.odr_tl, tl_opts)), key="odr_tl")
+
+    # Tổng hợp điều kiện WHERE SQL cho kết quả hiện thị
     where_clauses_odr = ["1=1"]
-    if filter_kh_odr != "Tất cả": where_clauses_odr.append(f"CAST(ma_khgui AS VARCHAR) = '{filter_kh_odr}'")
-    if filter_dt_odr != "Tất cả": where_clauses_odr.append(f"CAST(ma_doitac AS VARCHAR) = '{filter_dt_odr}'")
-    if filter_kh2_odr != "Tất cả": where_clauses_odr.append(f"CAST(ma_khgui AS VARCHAR) = '{filter_kh2_odr}'")
+    if st.session_state.odr_kh != "Tất cả": where_clauses_odr.append(f"CAST(ma_khgui AS VARCHAR) = '{st.session_state.odr_kh}'")
+    if st.session_state.odr_bc != "Tất cả": where_clauses_odr.append(f"CAST(ma_buucuc_phat AS VARCHAR) = '{st.session_state.odr_bc}'")
+    if st.session_state.odr_tuyen != "Tất cả": where_clauses_odr.append(f"CAST(tuyen AS VARCHAR) = '{st.session_state.odr_tuyen}'")
+    if st.session_state.odr_ld != "Tất cả": where_clauses_odr.append(f"CAST(ma_dv_viettel AS VARCHAR) = '{st.session_state.odr_ld}'")
+    if st.session_state.odr_tl != "Tất cả": where_clauses_odr.append(f"CAST(nhom_trong_luong AS VARCHAR) = '{st.session_state.odr_tl}'")
     
-    if isinstance(filter_date_odr, tuple) and len(filter_date_odr) == 2:
-        start_d, end_d = filter_date_odr[0], filter_date_odr[1]
+    if isinstance(st.session_state.odr_date, tuple) and len(st.session_state.odr_date) == 2:
+        start_d, end_d = st.session_state.odr_date[0], st.session_state.odr_date[1]
         where_clauses_odr.append(f"clean_date BETWEEN '{start_d}' AND '{end_d}'")
 
     where_sql_odr = " AND ".join(where_clauses_odr)
 
-    res_metrics_odr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_odr}").fetchone()
-    tong_sl_odr = res_metrics_odr[0]
+    # 2. TÍNH TOÁN KPI THỰC TẾ (4 CỘT - BỎ ĐƠN TỒN QUÁ HẠN)
+    res_metrics_odr = con.execute(f"""
+        SELECT 
+            COUNT(*) AS tong_sl,
+            COALESCE(SUM(PTC), 0) AS sl_ptc,
+            COALESCE(SUM(PTC_1), 0) AS sl_ptc1
+        FROM orders 
+        WHERE {where_sql_odr}
+    """).fetchone()
 
-    m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
+    tong_sl_odr = res_metrics_odr[0]
+    sl_ptc = res_metrics_odr[1]
+    sl_ptc1 = res_metrics_odr[2]
+
+    pct_ptc = (sl_ptc / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
+    pct_ptc1 = (sl_ptc1 / tong_sl_odr * 100) if tong_sl_odr > 0 else 0
+
+    m_odr1, m_odr2, m_odr3, m_odr4 = st.columns(4)
     with m_odr1: st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHẢI PHÁT</div><div class="metric-value">{tong_sl_odr:,.0f}</div><div class="metric-sub-green">▲ Thực tế</div></div>', unsafe_allow_html=True)
-    with m_odr2: st.markdown('<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC</div><div class="metric-value">74.8%</div><div class="metric-sub-red">▼ -6.2% vs Mục tiêu</div></div>', unsafe_allow_html=True)
-    with m_odr3: st.markdown('<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ LẦN 1</div><div class="metric-value">74.8%</div><div class="metric-sub-red">▼ -6.2% vs Mục tiêu</div></div>', unsafe_allow_html=True)
-    with m_odr4: st.markdown('<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div><div class="metric-value">74.8%</div><div class="metric-sub-red">▼ -6.2% vs Mục tiêu</div></div>', unsafe_allow_html=True)
-    with m_odr5: st.markdown('<div class="metric-card"><div class="metric-title">ĐƠN TỒN QUÁ HẠN</div><div class="metric-value">3,311</div><div class="metric-sub-red">▼ -6.2% vs Mục tiêu</div></div>', unsafe_allow_html=True)
+    with m_odr2: st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC</div><div class="metric-value">{pct_ptc:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+    with m_odr3: st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC LẦN 1</div><div class="metric-value">{pct_ptc1:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+    with m_odr4: st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div><div class="metric-value">{pct_ptc:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
 
     st.write("")
     
+    # Biểu đồ xu hướng sản lượng 7 ngày
     c_odr_chart, c_odr_right = st.columns([2, 1.3])
     with c_odr_chart:
         st.subheader("📈 XU HƯỚNG SẢN LƯỢNG PHÁT 7 NGÀY GẦN NHẤT")
@@ -65,13 +139,14 @@ def render(file_id: str):
 
     st.divider()
 
+    # Bảng tương tác Tỉnh phát / Bưu cục phát
     st.markdown('<p class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC PHÁT (BẤM CHỌN DÒNG CHI NHÁNH BÊN TRÁI ĐỂ LỌC BƯU CỤC BÊN PHẢI)</p>', unsafe_allow_html=True)
 
     cn_data_raw = con.execute(f"""
         SELECT 
             CAST(tinh_phat AS VARCHAR) AS cn,
             COUNT(*) AS tong_don,
-            ROUND(SUM(tong_cuoc)/1e6, 1) AS doanh_thu
+            SUM(PTC) AS ptc_cnt
         FROM orders 
         WHERE {where_sql_odr} AND tinh_phat IS NOT NULL
         GROUP BY tinh_phat 
@@ -83,15 +158,15 @@ def render(file_id: str):
             CAST(ma_buucuc_phat AS VARCHAR) AS bc, 
             CAST(tinh_phat AS VARCHAR) AS cn,
             COUNT(*) AS tong_don,
-            ROUND(SUM(tong_cuoc)/1e6, 1) AS doanh_thu
+            SUM(PTC) AS ptc_cnt
         FROM orders 
         WHERE {where_sql_odr} AND tinh_phat IS NOT NULL AND ma_buucuc_phat IS NOT NULL
         GROUP BY ma_buucuc_phat, tinh_phat 
         ORDER BY tong_don DESC
     """).fetchall()
 
-    rows_cn_html = "".join([f'<tr class="cn-row" data-cn="{item[0]}" onclick="filterBC(\'{item[0]}\', this)"><td style="font-weight: bold; cursor: pointer; text-align: left; padding-left: 10px;">{item[0]}</td><td style="text-align: right; padding-right: 10px;">{item[1]:,}</td><td style="text-align: right; padding-right: 10px;">{item[2]:,.1f}</td></tr>' for item in cn_data_raw])
-    rows_bc_html = "".join([f'<tr class="bc-row" data-cn="{item[1]}"><td style="font-weight: bold; text-align: left; padding-left: 10px;">{item[0]}</td><td style="font-weight: bold; text-align: center;">{item[1]}</td><td style="text-align: right; padding-right: 10px;">{item[2]:,}</td><td style="text-align: right; padding-right: 10px;">{item[3]:,.1f}</td></tr>' for item in bc_data_raw])
+    rows_cn_html = "".join([f'<tr class="cn-row" data-cn="{item[0]}" onclick="filterBC(\'{item[0]}\', this)"><td style="font-weight: bold; cursor: pointer; text-align: left; padding-left: 10px;">{item[0]}</td><td style="text-align: right; padding-right: 10px;">{item[1]:,}</td><td style="text-align: right; padding-right: 10px;">{item[2]:,}</td></tr>' for item in cn_data_raw])
+    rows_bc_html = "".join([f'<tr class="bc-row" data-cn="{item[1]}"><td style="font-weight: bold; text-align: left; padding-left: 10px;">{item[0]}</td><td style="font-weight: bold; text-align: center;">{item[1]}</td><td style="text-align: right; padding-right: 10px;">{item[2]:,}</td><td style="text-align: right; padding-right: 10px;">{item[3]:,}</td></tr>' for item in bc_data_raw])
 
     interactive_tables_html = f"""
     <!DOCTYPE html><html><head><style>
@@ -109,11 +184,11 @@ def render(file_id: str):
     <div class="grid-container">
         <div>
             <div class="table-title">Bảng Tỉnh Phát <span style="font-weight:normal; color:#666;">(Bấm chọn dòng để lọc Bưu cục)</span> <span class="btn-reset" onclick="resetFilter()">Xóa lọc</span></div>
-            <div class="table-scroll"><table><thead><tr><th style="text-align: left; padding-left: 10px;">Tỉnh phát</th><th style="text-align: right; padding-right: 10px;">Tổng đơn</th><th style="text-align: right; padding-right: 10px;">Doanh thu (Tr)</th></tr></thead><tbody>{rows_cn_html if rows_cn_html else "<tr><td colspan='3' style='text-align:center;'>Không có dữ liệu</td></tr>"}</tbody></table></div>
+            <div class="table-scroll"><table><thead><tr><th style="text-align: left; padding-left: 10px;">Tỉnh phát</th><th style="text-align: right; padding-right: 10px;">Tổng đơn</th><th style="text-align: right; padding-right: 10px;">Đơn PTC</th></tr></thead><tbody>{rows_cn_html if rows_cn_html else "<tr><td colspan='3' style='text-align:center;'>Không có dữ liệu</td></tr>"}</tbody></table></div>
         </div>
         <div>
             <div class="table-title">Bưu Cục Phát <span id="bc-title-status" style="color: #c62828; font-weight: bold;">(Toàn Quốc)</span></div>
-            <div class="table-scroll"><table><thead><tr><th style="text-align: left; padding-left: 10px;">Mã bưu cục phát</th><th>Tỉnh phát</th><th style="text-align: right; padding-right: 10px;">Sản lượng đơn</th><th style="text-align: right; padding-right: 10px;">Doanh thu (Tr)</th></tr></thead><tbody id="bc-tbody">{rows_bc_html if rows_bc_html else "<tr><td colspan='4' style='text-align:center;'>Không có dữ liệu</td></tr>"}</tbody></table></div>
+            <div class="table-scroll"><table><thead><tr><th style="text-align: left; padding-left: 10px;">Mã bưu cục phát</th><th>Tỉnh phát</th><th style="text-align: right; padding-right: 10px;">Sản lượng đơn</th><th style="text-align: right; padding-right: 10px;">Đơn PTC</th></tr></thead><tbody id="bc-tbody">{rows_bc_html if rows_bc_html else "<tr><td colspan='4' style='text-align:center;'>Không có dữ liệu</td></tr>"}</tbody></table></div>
         </div>
     </div>
     <script>
@@ -140,7 +215,7 @@ def render(file_id: str):
 
     st.divider()
 
-    # 2. Báo cáo Ma Trận Vận Hành
+    # 3. Báo cáo Ma Trận Vận Hành Cây 3 cấp
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     days_data = con.execute(f"SELECT clean_date, COUNT(*) as sl FROM orders WHERE {where_sql_odr} AND clean_date IS NOT NULL GROUP BY clean_date ORDER BY clean_date DESC LIMIT 7").fetchall()
@@ -149,7 +224,7 @@ def render(file_id: str):
     while len(sorted_days) < 7: sorted_days.insert(0, "--/--")
     d_vals = [days_dict.get(d, 0) for d in sorted_days]
 
-    m_current = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_odr}").fetchone()[0]
+    m_current = tong_sl_odr
 
     all_tree_data = con.execute(f"SELECT COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt, COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(*) as sl FROM orders WHERE {where_sql_odr} GROUP BY ma_doitac, tinh_phat, ma_buucuc_phat ORDER BY 1, 2, 4 DESC").fetchall()
 
@@ -258,63 +333,6 @@ def render(file_id: str):
                 <td>16.80</td><td>21.11</td><td>16.22</td><td>26.40</td><td>11.90</td><td class="text-green">+11.93</td>
                 <td>26.29</td><td>22.93</td><td class="text-green">+11.93</td>
             </tr>
-            <tr>
-                <td style="font-weight: bold;">% Phát thành công đg</td>
-                <td style="text-align: center;">99.00</td><td style="text-align: center;">100.00</td>
-                <td>18.15</td><td>10.17</td><td>15.94</td><td>25.08</td><td>19.14</td><td>28.11</td><td>27.75</td><td class="text-red">-14.05</td>
-                <td>16.80</td><td>21.11</td><td>16.22</td><td>26.40</td><td>11.90</td><td class="text-red">-14.05</td>
-                <td>26.29</td><td>22.93</td><td class="text-red">-14.05</td>
-            </tr>
-            <tr>
-                <td style="font-weight: bold;">% PTC in-day</td>
-                <td style="text-align: center;">80.00</td><td style="text-align: center;">100.00</td>
-                <td>28.42</td><td>27.42</td><td>25.96</td><td>19.36</td><td>13.26</td><td>22.42</td><td>18.79</td><td class="text-green">+11.93</td>
-                <td>14.89</td><td>13.99</td><td>25.81</td><td>12.91</td><td>26.96</td><td class="text-green">+11.93</td>
-                <td>22.59</td><td>12.32</td><td class="text-green">+11.93</td>
-            </tr>
-            <tr>
-                <td style="font-weight: bold;">% PTC Next – day</td>
-                <td style="text-align: center;">80.00</td><td style="text-align: center;">100.00</td>
-                <td>11.56</td><td>25.73</td><td>21.61</td><td>17.73</td><td>27.94</td><td>23.80</td><td>22.99</td><td class="text-red">-2.22</td>
-                <td>21.62</td><td>26.19</td><td>28.47</td><td>25.42</td><td>13.49</td><td class="text-red">-2.22</td>
-                <td>21.65</td><td>21.07</td><td class="text-red">-2.22</td>
-            </tr>
-
-            <tr class="row-group" onclick="toggleRow('group_ton', event, 'btn_ton')">
-                <td><span class="toggle-btn" id="btn_ton">[+]</span> <b>% Tồn quá hạn 1 ngày</b></td>
-                <td>-</td><td>-</td>
-                <td>12</td><td>23</td><td>12</td><td>12</td><td>23</td><td>12</td><td>12</td><td class="text-green">+5.22</td>
-                <td>23</td><td>23</td><td>12</td><td>12</td><td>23</td><td class="text-green">+5.22</td>
-                <td>12</td><td>23</td><td class="text-green">+5.22</td>
-            </tr>
-            <tr class="sub-row-1 group_ton" style="display:none; background-color: #fafafa;">
-                <td style="padding-left: 30px;"><span class="toggle-btn" style="background:#f0f0f0;">-</span> % Tồn quá hạn trên 2 ngày</td>
-                <td>-</td><td>-</td>
-                <td>10</td><td>20</td><td>10</td><td>10</td><td>20</td><td>10</td><td>10</td><td class="text-green">+4.15</td>
-                <td>20</td><td>20</td><td>10</td><td>10</td><td>20</td><td class="text-green">+4.15</td>
-                <td>10</td><td>20</td><td class="text-green">+4.15</td>
-            </tr>
-            <tr class="sub-row-1 group_ton" style="display:none; background-color: #fafafa;">
-                <td style="padding-left: 30px;"><span class="toggle-btn" style="background:#f0f0f0;">-</span> % Tồn quá hạn trên 3 ngày</td>
-                <td>-</td><td>-</td>
-                <td>8</td><td>15</td><td>8</td><td>8</td><td>15</td><td>8</td><td>8</td><td class="text-green">+3.10</td>
-                <td>15</td><td>15</td><td>8</td><td>8</td><td>15</td><td class="text-green">+3.10</td>
-                <td>8</td><td>15</td><td class="text-green">+3.10</td>
-            </tr>
-            <tr class="sub-row-1 group_ton" style="display:none; background-color: #fafafa;">
-                <td style="padding-left: 30px;"><span class="toggle-btn" style="background:#f0f0f0;">-</span> % Tồn quá hạn trên 4 ngày</td>
-                <td>-</td><td>-</td>
-                <td>5</td><td>10</td><td>5</td><td>5</td><td>10</td><td>5</td><td>5</td><td class="text-green">+2.05</td>
-                <td>10</td><td>10</td><td>5</td><td>5</td><td>10</td><td class="text-green">+2.05</td>
-                <td>5</td><td>10</td><td class="text-green">+2.05</td>
-            </tr>
-            <tr class="sub-row-1 group_ton" style="display:none; background-color: #fafafa;">
-                <td style="padding-left: 30px;"><span class="toggle-btn" style="background:#f0f0f0;">-</span> % Tồn quá hạn trên 5 ngày</td>
-                <td>-</td><td>-</td>
-                <td>2</td><td>5</td><td>2</td><td>2</td><td>5</td><td>2</td><td>2</td><td class="text-green">+1.01</td>
-                <td>5</td><td>5</td><td>2</td><td>2</td><td>5</td><td class="text-green">+1.01</td>
-                <td>2</td><td>5</td><td class="text-green">+1.01</td>
-            </tr>
         </tbody>
     </table>
 
@@ -343,7 +361,7 @@ def render(file_id: str):
     """
     components.html(matrix_full_html, height=480, scrolling=True)
 
-    # 3. Ba Bảng Tồn Khâu
+    # 4. Ba Bảng Tồn Khâu
     ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(*) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
 
     tinh_tree = {}
