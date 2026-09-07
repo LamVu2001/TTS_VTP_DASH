@@ -23,6 +23,6 @@ def get_odr_db(file_id: str = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"):
                    TRY_CAST(ngay_bat_dau_phai_phat AS DATE),
                    TRY_CAST(ngay_trong_khoang AS DATE)
                ) as clean_date
-        FROM read_parquet('{local_file}', ignore_errors=true)
+        FROM read_parquet('{local_file}')
     """)
     return con
