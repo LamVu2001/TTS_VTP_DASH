@@ -99,75 +99,78 @@ def render(file_id: str):
     with of8:
         st.multiselect("MÃ TRẠNG THÁI", tt_opts, key="f_tt", placeholder="Tất cả")
 
-   # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI
-    where_sql_odr = build_where()
+  # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI THEO NGÀY PHÁT THỰC TẾ (clean_date_ptc)
+    
+    # Tạo điều kiện lọc ngày theo clean_date_ptc dành riêng cho các chỉ số phát thành công
+    ptc_date_cond = "1=1"
+    if isinstance(st.session_state.f_date, (list, tuple)) and len(st.session_state.f_date) == 2:
+        ptc_date_cond = f"clean_date_ptc BETWEEN '{st.session_state.f_date[0]}' AND '{st.session_state.f_date[1]}'"
+
+    # Điều kiện WHERE hoàn chỉnh cho KPI (kết hợp bộ lọc khác + ngày phát clean_date_ptc)
+    where_kpi_sql = f"{build_where(exclude='date')} AND {ptc_date_cond}"
 
     res_metrics_odr = con.execute(f"""
         SELECT 
-            -- Tổng sản lượng đơn phải phát trong kỳ
-            COUNT(DISTINCT ma_phieugui) AS tong_sl_phai_phat,
-            
-            -- (2) Mẫu số chung: Tổng đơn PTC có Trạng thái 501 trong kỳ
+            -- Tổng đơn được phát thành công trong kỳ (TT 501 + clean_date_ptc trong khoảng lọc)
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' THEN ma_phieugui 
             END) AS tong_ptc_501,
-            
-            -- Tỷ lệ phát TC (Toàn bộ đơn PTC / Tổng sản lượng)
-            COUNT(DISTINCT CASE 
-                WHEN PTC = 1 THEN ma_phieugui 
-            END) AS sl_ptc,
-            
-            -- Tỷ lệ phát TC lần 1
-            COUNT(DISTINCT CASE 
-                WHEN PTC_1 = 1 THEN ma_phieugui 
-            END) AS sl_ptc1,
-            
-            -- (1a) Tử số KPI Đúng giờ: Đơn PTC 501 trong SLA cam kết
+
+            -- (1a) Đơn PTC 501 trong SLA cam kết (Phát đúng giờ)
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' 
                  AND danh_gia_giao_hang = 'Giao đúng giờ' 
                 THEN ma_phieugui 
             END) AS sl_ptc_501_in_sla,
             
-            -- (1b) Tử số KPI Đúng giờ lần 1: Đơn có TT 501, 505, 506, 507, 509 lần đầu trong SLA cam kết
+            -- (1b) Đơn có TT 501, 505, 506, 507, 509 phát lần 1 trong SLA cam kết
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) IN ('501', '505', '506', '507', '509') 
                  AND PTC_1 = 1 
                  AND danh_gia_giao_hang = 'Giao đúng giờ' 
                 THEN ma_phieugui 
-            END) AS sl_lan1_in_sla
+            END) AS sl_lan1_in_sla,
+
+            -- Đơn PTC chung trong kỳ
+            COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) AS sl_ptc,
+            
+            -- Đơn PTC Lần 1 chung trong kỳ
+            COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1,
+
+            -- Tổng đơn phải phát (Lọc theo clean_date phân bổ ban đầu để so sánh)
+            (SELECT COUNT(DISTINCT ma_phieugui) FROM orders WHERE {build_where()}) AS tong_sl_phai_phat
 
         FROM orders 
-        WHERE {where_sql_odr}
+        WHERE {where_kpi_sql} AND clean_date_ptc IS NOT NULL
     """).fetchone()
 
-    tong_sl_phai_phat = res_metrics_odr[0] or 0
-    mau_so_501 = res_metrics_odr[1] or 0  # (2) Mẫu số cho 2 công thức đúng giờ
-    sl_ptc = res_metrics_odr[2] or 0
-    sl_ptc1 = res_metrics_odr[3] or 0
-    tu_so_dung_gio = res_metrics_odr[4] or 0    # (1a) Tử số Đúng giờ
-    tu_so_lan1_dung_gio = res_metrics_odr[5] or 0 # (1b) Tử số Đúng giờ lần 1
+    mau_so_501 = res_metrics_odr[0] or 0          # (2) Tổng đơn PTC TT 501 được phát trong kỳ
+    tu_so_dung_gio = res_metrics_odr[1] or 0      # (1a) Tử số Đúng giờ
+    tu_so_lan1_dung_gio = res_metrics_odr[2] or 0 # (1b) Tử số Đúng giờ lần 1
+    sl_ptc = res_metrics_odr[3] or 0
+    sl_ptc1 = res_metrics_odr[4] or 0
+    tong_sl_phai_phat = res_metrics_odr[5] or 0  # Sản lượng phải phát (giao trong kỳ)
 
-    # Tính toán tỷ lệ %
+    # Tính % theo đúng công thức
     pct_ptc = (sl_ptc / tong_sl_phai_phat * 100) if tong_sl_phai_phat > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_phai_phat * 100) if tong_sl_phai_phat > 0 else 0
     
-    # Tính 2 KPI đúng giờ theo chuẩn Mẫu số (2) là Tổng đơn PTC TT 501
+    # Tính 2 KPI đúng giờ theo mẫu số đơn PTC TT 501 phát trong kỳ
     pct_ptc_dung_gio = (tu_so_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
     pct_ptc1_dung_gio = (tu_so_lan1_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
 
-    # Hiển thị 5 thẻ KPI
+    # HIỂN THỊ METRICS
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
     with m_odr1: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHẢI PHÁT</div><div class="metric-value">{tong_sl_phai_phat:,.0f}</div><div class="metric-sub-green">▲ Thực tế</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHẢI PHÁT</div><div class="metric-value">{tong_sl_phai_phat:,.0f}</div><div class="metric-sub-green">▲ Phân bổ</div></div>', unsafe_allow_html=True)
     with m_odr2: 
         st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC</div><div class="metric-value">{pct_ptc:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
     with m_odr3: 
         st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC LẦN 1</div><div class="metric-value">{pct_ptc1:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
     with m_odr4: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div><div class="metric-value">{pct_ptc_dung_gio:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div><div class="metric-value">{pct_ptc_dung_gio:.1f}%</div><div class="metric-sub-green">Theo ngày PTC</div></div>', unsafe_allow_html=True)
     with m_odr5: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT ĐÚNG GIỜ LẦN 1</div><div class="metric-value">{pct_ptc1_dung_gio:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT ĐÚNG GIỜ LẦN 1</div><div class="metric-value">{pct_ptc1_dung_gio:.1f}%</div><div class="metric-sub-green">Theo ngày PTC</div></div>', unsafe_allow_html=True)
 
     st.write("")
     
