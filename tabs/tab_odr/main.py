@@ -99,7 +99,7 @@ def render(file_id: str):
     with of8:
         st.multiselect("MÃ TRẠNG THÁI", tt_opts, key="f_tt", placeholder="Tất cả")
 
-    # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI
+   # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI (CHỈ TÍNH MÃ TRẠNG THÁI 501)
     where_sql_odr = build_where()
 
     res_metrics_odr = con.execute(f"""
@@ -110,7 +110,7 @@ def render(file_id: str):
             COUNT(DISTINCT CASE WHEN PTC = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) AS sl_ptc_dung_gio,
             COUNT(DISTINCT CASE WHEN PTC_1 = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) AS sl_ptc1_dung_gio
         FROM orders 
-        WHERE {where_sql_odr}
+        WHERE {where_sql_odr} AND CAST(ma_trangthai AS VARCHAR) = '501'
     """).fetchone()
 
     tong_sl_odr = res_metrics_odr[0] or 0
