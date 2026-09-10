@@ -160,25 +160,51 @@ def render(file_id: str):
 
     st.write("")
     
-    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG THEO THỜI GIAN PHÁT THỰC TẾ (CAST(tg_ptc AS DATE))
+    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG CÓ CHỌN TIME VIEW (NGÀY / TUẦN / THÁNG)
     c_odr_chart, c_odr_right = st.columns([2, 1.3])
     with c_odr_chart:
-        st.subheader("📈 XU HƯỚNG SẢN LƯỢNG PHÁT THÀNH CÔNG")
+        # Hàng chứa tiêu đề và nút chọn Time View
+        chart_head_1, chart_head_2 = st.columns([1.2, 1])
+        with chart_head_1:
+            st.subheader("📈 XU HƯỚNG SẢN LƯỢNG PHÁT THÀNH CÔNG")
+        with chart_head_2:
+            time_view = st.radio(
+                "Chế độ xem:",
+                options=["Ngày", "Tuần", "Tháng"],
+                index=0,
+                horizontal=True,
+                key="chart_time_view",
+                label_visibility="collapsed"
+            )
+
         try:
+            # Xác định biểu thức SQL nhóm thời gian theo Chế độ xem đã chọn
+            if time_view == "Tuần":
+                # Quy chuẩn Chủ Nhật -> Thứ 7 cho TikTok Shop
+                group_expr = "CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS VARCHAR)"
+                x_label = "Ngay_Dau_Tuan"
+            elif time_view == "Tháng":
+                group_expr = "STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m')"
+                x_label = "Thang"
+            else:
+                # Mặc định theo Ngày
+                group_expr = "CAST(CAST(tg_ptc AS DATE) AS VARCHAR)"
+                x_label = "Ngay"
+
             df_odr_daily = con.execute(f"""
                 SELECT 
-                    CAST(CAST(tg_ptc AS DATE) AS VARCHAR) as ngay_phat_tc, 
+                    {group_expr} as {x_label}, 
                     COUNT(DISTINCT ma_phieugui) as SanLuongPTC 
                 FROM orders 
                 WHERE {where_sql_odr} AND PTC = 1 AND tg_ptc IS NOT NULL
-                GROUP BY CAST(tg_ptc AS DATE) 
-                ORDER BY CAST(tg_ptc AS DATE) ASC
+                GROUP BY 1
+                ORDER BY 1 ASC
             """).fetchdf()
 
             if len(df_odr_daily) > 0:
                 fig_odr = px.line(
                     df_odr_daily, 
-                    x="ngay_phat_tc", 
+                    x=x_label, 
                     y="SanLuongPTC", 
                     markers=True,
                     text="SanLuongPTC"
@@ -206,7 +232,7 @@ def render(file_id: str):
 
     with c_odr_right:
         st.subheader("💡 THÔNG TIN TỔNG QUAN ODR")
-        st.info("Biểu đồ bên trái thể hiện số lượng mã phiếu gửi phát thành công (COUNT DISTINCT ma_phieugui khi PTC = 1) nhóm theo mốc thời gian phát thực tế (tg_ptc) trong khoảng thời gian đã chọn.")
+        st.info("Biểu đồ hỗ trợ chuyển đổi chế độ xem linh hoạt theo **Ngày**, **Tuần (Chủ Nhật - Thứ 7)**, hoặc **Tháng** dựa trên mốc thời gian phát thành công `tg_ptc`.")
 
     st.divider()
 
