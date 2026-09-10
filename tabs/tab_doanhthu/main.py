@@ -240,18 +240,18 @@ def render(file_id=None):
 
 
     # ---------------------------------------------------------
-    # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (CHUẨN KHUNG MA TRẬN ODR)
+    # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (FIX CỘT THỜI GIAN TG_PTC)
     # ---------------------------------------------------------
     st.subheader("📊 BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG")
 
     try:
         base_where = f"WHERE {where_sql_dt}" if where_sql_dt else ""
 
-        # 1. LẤY MỐC THỜI GIAN (7 ngày, 5 tuần, 2 tháng)
+        # 1. LẤY MỐC THỜI GIAN (Dùng cột tg_ptc chuẩn)
         days_df = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(ngay_tao AS DATE), '%Y-%m-%d') as dt, 
-                STRFTIME(CAST(ngay_tao AS DATE), '%d/%m') as dt_label
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as dt, 
+                STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label
             FROM orders {base_where}
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 7
         """).fetchdf()
@@ -261,8 +261,8 @@ def render(file_id=None):
 
         weeks_df = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(DATE_TRUNC('week', CAST(ngay_tao AS DATE)) AS DATE), '%Y-%m-%d') as min_date,
-                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(ngay_tao AS DATE)) AS DATE), '%W') as week_label
+                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as min_date,
+                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%W') as week_label
             FROM orders {base_where}
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 5
         """).fetchdf()
@@ -271,7 +271,7 @@ def render(file_id=None):
         week_labels = weeks_df["week_label"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
 
         months_df = con.execute(f"""
-            SELECT DISTINCT STRFTIME(CAST(ngay_tao AS DATE), '%Y-%m') as m_key
+            SELECT DISTINCT STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key
             FROM orders {base_where}
             ORDER BY 1 DESC LIMIT 2
         """).fetchdf()
@@ -283,7 +283,7 @@ def render(file_id=None):
         # 2. AGGREGATE BẢNG TỔNG (SẢN LƯỢNG & DOANH THU)
         df_d = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(ngay_tao AS DATE), '%Y-%m-%d') as d_key,
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key,
                 COUNT(DISTINCT ma_phieugui) as sl,
                 COALESCE(SUM(tong_cuoc), 0) as dt
             FROM orders {base_where}
@@ -292,7 +292,7 @@ def render(file_id=None):
 
         df_w = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(DATE_TRUNC('week', CAST(ngay_tao AS DATE)) AS DATE), '%Y-%m-%d') as w_key,
+                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key,
                 COUNT(DISTINCT ma_phieugui) as sl,
                 COALESCE(SUM(tong_cuoc), 0) as dt
             FROM orders {base_where}
@@ -301,7 +301,7 @@ def render(file_id=None):
 
         df_m = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(ngay_tao AS DATE), '%Y-%m') as m_key,
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key,
                 COUNT(DISTINCT ma_phieugui) as sl,
                 COALESCE(SUM(tong_cuoc), 0) as dt
             FROM orders {base_where}
@@ -342,26 +342,24 @@ def render(file_id=None):
         mom_dt = ((v_m_dt[1] - v_m_dt[0])/v_m_dt[0]*100) if len(v_m_dt)>1 and v_m_dt[0]>0 else 0
 
         # 3. TRUY VẤN CÂY DỮ LIỆU CẤP 1 (MÃ KH) & CẤP 2 (TỈNH -> BƯU CỤC)
-        # 3.1 Dữ liệu Mã KH
         kh_day_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(ngay_tao AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
+            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
         """).fetchdf()
         kh_week_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(DATE_TRUNC('week', CAST(ngay_tao AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
+            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
         """).fetchdf()
         kh_month_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(ngay_tao AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
+            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
         """).fetchdf()
 
-        # 3.2 Dữ liệu Tỉnh -> Bưu cục
         tree_day_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(buu_cuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(ngay_tao AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
+            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(buu_cuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
         """).fetchdf()
         tree_week_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(buu_cuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(DATE_TRUNC('week', CAST(ngay_tao AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
+            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(buu_cuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
         """).fetchdf()
         tree_month_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(buu_cuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(ngay_tao AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
+            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(buu_cuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
         """).fetchdf()
 
         # Maps dữ liệu
