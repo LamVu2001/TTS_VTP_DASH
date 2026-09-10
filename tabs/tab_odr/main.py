@@ -440,9 +440,11 @@ def render(file_id: str):
         SELECT 
             CAST(tinh_phat AS VARCHAR) AS cn,
             COUNT(DISTINCT ma_phieugui) AS tong_don,
-            COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) AS ptc_cnt
+            COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) AS ptc_dung_gio,
+            COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao không đúng giờ' THEN ma_phieugui END) AS sl_failed,
+            ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 1) AS ty_le_odr
         FROM orders 
-        WHERE {where_sql_odr} AND tinh_phat IS NOT NULL
+        WHERE {where_sql_odr} AND tinh_phat IS NOT NULL AND tg_ptc IS NOT NULL
         GROUP BY tinh_phat 
         ORDER BY tong_don DESC
     """).fetchall()
@@ -452,20 +454,44 @@ def render(file_id: str):
             CAST(ma_buucuc_phat AS VARCHAR) AS bc, 
             CAST(tinh_phat AS VARCHAR) AS cn,
             COUNT(DISTINCT ma_phieugui) AS tong_don,
-            COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) AS ptc_cnt
+            COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) AS ptc_dung_gio,
+            COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao không đúng giờ' THEN ma_phieugui END) AS sl_failed,
+            ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 1) AS ty_le_odr
         FROM orders 
-        WHERE {where_sql_odr} AND tinh_phat IS NOT NULL AND ma_buucuc_phat IS NOT NULL
+        WHERE {where_sql_odr} AND tinh_phat IS NOT NULL AND ma_buucuc_phat IS NOT NULL AND tg_ptc IS NOT NULL
         GROUP BY ma_buucuc_phat, tinh_phat 
         ORDER BY tong_don DESC
     """).fetchall()
 
-    rows_cn_html = "".join([f'<tr class="cn-row" data-cn="{item[0]}" onclick="filterBC(\'{item[0]}\', this)"><td style="font-weight: bold; cursor: pointer; text-align: left; padding-left: 10px;">{item[0]}</td><td style="text-align: right; padding-right: 10px;">{item[1]:,}</td><td style="text-align: right; padding-right: 10px;">{item[2]:,}</td></tr>' for item in cn_data_raw])
-    rows_bc_html = "".join([f'<tr class="bc-row" data-cn="{item[1]}"><td style="font-weight: bold; text-align: left; padding-left: 10px;">{item[0]}</td><td style="font-weight: bold; text-align: center;">{item[1]}</td><td style="text-align: right; padding-right: 10px;">{item[2]:,}</td><td style="text-align: right; padding-right: 10px;">{item[3]:,}</td></tr>' for item in bc_data_raw])
+    # Render dòng cho bảng Tỉnh Phát (Trái)
+    rows_cn_html = "".join([
+        f'<tr class="cn-row" data-cn="{item[0]}" onclick="filterBC(\'{item[0]}\', this)">'
+        f'<td style="font-weight: bold; cursor: pointer; text-align: left; padding-left: 10px;">{item[0]}</td>'
+        f'<td style="text-align: right; padding-right: 10px;">{item[1]:,}</td>'
+        f'<td style="text-align: right; padding-right: 10px;">{item[2]:,}</td>'
+        f'<td style="text-align: right; padding-right: 10px; color: #c62828;">{item[3]:,}</td>'
+        f'<td style="text-align: right; padding-right: 10px; font-weight: bold; color: #2e7d32;">{item[4]:.1f}%</td>'
+        f'</tr>' 
+        for item in cn_data_raw
+    ])
+
+    # Render dòng cho bảng Bưu Cục Phát (Phải)
+    rows_bc_html = "".join([
+        f'<tr class="bc-row" data-cn="{item[1]}">'
+        f'<td style="font-weight: bold; text-align: left; padding-left: 10px;">{item[0]}</td>'
+        f'<td style="font-weight: bold; text-align: center;">{item[1]}</td>'
+        f'<td style="text-align: right; padding-right: 10px;">{item[2]:,}</td>'
+        f'<td style="text-align: right; padding-right: 10px;">{item[3]:,}</td>'
+        f'<td style="text-align: right; padding-right: 10px; color: #c62828;">{item[4]:,}</td>'
+        f'<td style="text-align: right; padding-right: 10px; font-weight: bold; color: #2e7d32;">{item[5]:.1f}%</td>'
+        f'</tr>' 
+        for item in bc_data_raw
+    ])
 
     interactive_tables_html = f"""
     <!DOCTYPE html><html><head><style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: transparent; }}
-        .grid-container {{ display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }}
+        .grid-container {{ display: grid; grid-template-columns: 1fr 1.15fr; gap: 15px; }}
         .table-title {{ font-size: 12px; font-weight: bold; color: #333; margin-bottom: 6px; }}
         .table-scroll {{ max-height: 360px; overflow-y: auto; border: 1px solid #d3d3d3; border-radius: 4px; background: #fff; }}
         table {{ width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11.5px; }}
@@ -478,11 +504,38 @@ def render(file_id: str):
     <div class="grid-container">
         <div>
             <div class="table-title">Bảng Tỉnh Phát <span style="font-weight:normal; color:#666;">(Bấm chọn dòng để lọc Bưu cục)</span> <span class="btn-reset" onclick="resetFilter()">Xóa lọc</span></div>
-            <div class="table-scroll"><table><thead><tr><th style="text-align: left; padding-left: 10px;">Tỉnh phát</th><th style="text-align: right; padding-right: 10px;">Tổng đơn</th><th style="text-align: right; padding-right: 10px;">Đơn PTC</th></tr></thead><tbody>{rows_cn_html if rows_cn_html else "<tr><td colspan='3' style='text-align:center;'>Không có dữ liệu</td></tr>"}</tbody></table></div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; padding-left: 10px;">Tỉnh phát</th>
+                            <th style="text-align: right; padding-right: 10px;">SL PTC</th>
+                            <th style="text-align: right; padding-right: 10px;">PTC Đúng Giờ</th>
+                            <th style="text-align: right; padding-right: 10px;">Failed SLA</th>
+                            <th style="text-align: right; padding-right: 10px;">Tỷ lệ ODR</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows_cn_html if rows_cn_html else "<tr><td colspan='5' style='text-align:center;'>Không có dữ liệu</td></tr>"}</tbody>
+                </table>
+            </div>
         </div>
         <div>
             <div class="table-title">Bưu Cục Phát <span id="bc-title-status" style="color: #c62828; font-weight: bold;">(Toàn Quốc)</span></div>
-            <div class="table-scroll"><table><thead><tr><th style="text-align: left; padding-left: 10px;">Mã bưu cục phát</th><th>Tỉnh phát</th><th style="text-align: right; padding-right: 10px;">Sản lượng đơn</th><th style="text-align: right; padding-right: 10px;">Đơn PTC</th></tr></thead><tbody id="bc-tbody">{rows_bc_html if rows_bc_html else "<tr><td colspan='4' style='text-align:center;'>Không có dữ liệu</td></tr>"}</tbody></table></div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align: left; padding-left: 10px;">Mã bưu cục phát</th>
+                            <th>Tỉnh phát</th>
+                            <th style="text-align: right; padding-right: 10px;">SL PTC</th>
+                            <th style="text-align: right; padding-right: 10px;">PTC Đúng Giờ</th>
+                            <th style="text-align: right; padding-right: 10px;">Failed SLA</th>
+                            <th style="text-align: right; padding-right: 10px;">Tỷ lệ ODR</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bc-tbody">{rows_bc_html if rows_bc_html else "<tr><td colspan='6' style='text-align:center;'>Không có dữ liệu</td></tr>"}</tbody>
+                </table>
+            </div>
         </div>
     </div>
     <script>
