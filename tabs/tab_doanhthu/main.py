@@ -40,8 +40,8 @@ def render(file_id=None):
         conds = ["1=1"]
         
         # Sửa ép kiểu CAST AS DATE chuẩn xác giống Tab ODR
-        if exclude != "date" and isinstance(st.session_state.f_date, (list, tuple)) and len(st.session_state.f_date) == 2:
-            conds.append(f"CAST(tg_ptc AS DATE) BETWEEN '{st.session_state.f_date[0]}' AND '{st.session_state.f_date[1]}'")
+        if exclude != "date" and isinstance(st.session_state.f_dt_date, (list, tuple)) and len(st.session_state.f_dt_date) == 2:
+            conds.append(f"CAST(tg_ptc AS DATE) BETWEEN '{st.session_state.f_dt_date[0]}' AND '{st.session_state.f_dt_date[1]}'")
 
         
         if exclude != "kh":
