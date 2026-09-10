@@ -565,148 +565,311 @@ def render(file_id: str):
     # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
-    days_data = con.execute(f"SELECT CAST(tg_ptc AS DATE), COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL GROUP BY CAST(tg_ptc AS DATE) ORDER BY CAST(tg_ptc AS DATE) DESC LIMIT 7").fetchall()
-    days_dict = {row[0].strftime('%d/%m'): row[1] for row in days_data if row[0]}
-    sorted_days = sorted(list(days_dict.keys()))
-    while len(sorted_days) < 7: sorted_days.insert(0, "--/--")
-    d_vals = [days_dict.get(d, 0) for d in sorted_days]
+    try:
+        # --- 1. TÍNH DỮ LIỆU THỰC CHO 7 NGÀY GẦN NHẤT ---
+        days_df = con.execute(f"""
+            SELECT 
+                CAST(tg_ptc AS DATE) as dt,
+                STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label,
+                COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
+                COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
+                COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
+                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
+                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 THEN ma_phieugui END) as sl_ptc1
+            FROM orders 
+            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
+            GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 7
+        """).fetchdf()
 
-    m_current = tong_sl_phat
+        if not days_df.empty:
+            days_df = days_df.sort_values("dt", ascending=True).reset_index(drop=True)
+            sorted_days = days_df["dt_label"].tolist()
+            d_vals_phat = days_df["sl_phai_phat"].tolist()
+            d_vals_ptc = days_df["sl_ptc"].tolist()
+            
+            # Tính % ODR & % PTC1 theo ngày
+            d_vals_pct_odr = [(dg / NULLIF(pt, 0) * 100) if pt > 0 else 0 for dg, pt in zip(days_df["sl_dung_gio"], days_df["sl_phai_phat"])]
+            d_vals_pct_ptc1 = [(p1g / NULLIF(p1, 0) * 100) if p1 > 0 else 0 for p1g, p1 in zip(days_df["sl_ptc1_dung_gio"], days_df["sl_ptc1"])]
+            
+            # Tính DoD (Ngày cuối so với ngày áp cuối)
+            dod_phat = ((d_vals_phat[-1] - d_vals_phat[-2]) / d_vals_phat[-2] * 100) if len(d_vals_phat) > 1 and d_vals_phat[-2] > 0 else 0
+            dod_ptc = ((d_vals_ptc[-1] - d_vals_ptc[-2]) / d_vals_ptc[-2] * 100) if len(d_vals_ptc) > 1 and d_vals_ptc[-2] > 0 else 0
+            dod_odr = d_vals_pct_odr[-1] - d_vals_pct_odr[-2] if len(d_vals_pct_odr) > 1 else 0
+            dod_ptc1 = d_vals_pct_ptc1[-1] - d_vals_pct_ptc1[-2] if len(d_vals_pct_ptc1) > 1 else 0
+        else:
+            sorted_days = ["--/--"] * 7
+            d_vals_phat = d_vals_ptc = d_vals_pct_odr = d_vals_pct_ptc1 = [0] * 7
+            dod_phat = dod_ptc = dod_odr = dod_ptc1 = 0
 
-    all_tree_data = con.execute(f"SELECT COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt, COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY ma_doitac, tinh_phat, ma_buucuc_phat ORDER BY 1, 2, 4 DESC").fetchall()
+        # --- 2. TÍNH DỮ LIỆU THỰC CHO 5 TUẦN GẦN NHẤT (WEEK CHỦ NHẬT -> THỨ 7) ---
+        weeks_df = con.execute(f"""
+            SELECT 
+                'W' || STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%W') as week_label,
+                COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
+                COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
+                COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
+                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
+                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 THEN ma_phieugui END) as sl_ptc1,
+                MIN(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)) as min_date
+            FROM orders 
+            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
+            GROUP BY 1 ORDER BY min_date DESC LIMIT 5
+        """).fetchdf()
 
-    tree_struct = {}
-    for dt, tinh, bc, sl in all_tree_data:
-        if dt not in tree_struct: tree_struct[dt] = {'sl': 0, 'tinhs': {}}
-        tree_struct[dt]['sl'] += sl
-        if tinh not in tree_struct[dt]['tinhs']: tree_struct[dt]['tinhs'][tinh] = {'sl': 0, 'bcs': {}}
-        tree_struct[dt]['tinhs'][tinh]['sl'] += sl
-        tree_struct[dt]['tinhs'][tinh]['bcs'][bc] = sl
+        if not weeks_df.empty:
+            weeks_df = weeks_df.sort_values("min_date", ascending=True).reset_index(drop=True)
+            sorted_weeks = weeks_df["week_label"].tolist()
+            w_vals_phat = weeks_df["sl_phai_phat"].tolist()
+            w_vals_ptc = weeks_df["sl_ptc"].tolist()
+            w_vals_pct_odr = [(dg / NULLIF(pt, 0) * 100) if pt > 0 else 0 for dg, pt in zip(weeks_df["sl_dung_gio"], weeks_df["sl_phai_phat"])]
+            w_vals_pct_ptc1 = [(p1g / NULLIF(p1, 0) * 100) if p1 > 0 else 0 for p1g, p1 in zip(weeks_df["sl_ptc1_dung_gio"], weeks_df["sl_ptc1"])]
 
-    matrix_rows_html = ""
-    for idx_dt, (dt_name, dt_data) in enumerate(tree_struct.items()):
-        dt_sl = dt_data['sl']
-        dt_clean_id = f"dt_{idx_dt}"
-        matrix_rows_html += f"""
-        <tr class="sub-row-1 group_root" style="display:none; background-color: #f4f6f8; font-weight:600;" onclick="toggleRow('{dt_clean_id}', event, 'btn_{dt_clean_id}')">
-            <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{dt_clean_id}">[+]</span> Đối tác: <b>{dt_name}</b></td>
-            <td>-</td><td>-</td>
-            <td>{dt_sl//7}</td><td>{dt_sl//7}</td><td>{dt_sl//7}</td><td>{dt_sl//7}</td><td>{dt_sl//7}</td><td>{dt_sl//7}</td><td>{dt_sl//7}</td><td class="text-green">+5.22%</td>
-            <td>{dt_sl}</td><td>{dt_sl}</td><td>{dt_sl}</td><td>{dt_sl}</td><td>{dt_sl}</td><td class="text-green">+5.22%</td>
-            <td>{dt_sl}</td><td>{dt_sl}</td><td class="text-green">+5.22%</td>
-        </tr>
-        """
-        for idx_tinh, (tinh_name, tinh_data) in enumerate(dt_data['tinhs'].items()):
-            tinh_sl = tinh_data['sl']
-            tinh_clean_id = f"{dt_clean_id}_tinh_{idx_tinh}"
+            wow_phat = ((w_vals_phat[-1] - w_vals_phat[-2]) / w_vals_phat[-2] * 100) if len(w_vals_phat) > 1 and w_vals_phat[-2] > 0 else 0
+            wow_ptc = ((w_vals_ptc[-1] - w_vals_ptc[-2]) / w_vals_ptc[-2] * 100) if len(w_vals_ptc) > 1 and w_vals_ptc[-2] > 0 else 0
+            wow_odr = w_vals_pct_odr[-1] - w_vals_pct_odr[-2] if len(w_vals_pct_odr) > 1 else 0
+            wow_ptc1 = w_vals_pct_ptc1[-1] - w_vals_pct_ptc1[-2] if len(w_vals_pct_ptc1) > 1 else 0
+        else:
+            sorted_weeks = ["W--"] * 5
+            w_vals_phat = w_vals_ptc = w_vals_pct_odr = w_vals_pct_ptc1 = [0] * 5
+            wow_phat = wow_ptc = wow_odr = wow_ptc1 = 0
+
+        # --- 3. TÍNH DỮ LIỆU THỰC CHO THÁNG (M, M-1, MoM) ---
+        month_df = con.execute(f"""
+            SELECT 
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_label,
+                COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
+                COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
+                COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
+                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
+                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 THEN ma_phieugui END) as sl_ptc1
+            FROM orders 
+            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
+            GROUP BY 1 ORDER BY 1 DESC LIMIT 2
+        """).fetchdf()
+
+        if len(month_df) >= 1:
+            m_curr = month_df.iloc[0]
+            m_prev = month_df.iloc[1] if len(month_df) > 1 else m_curr
+
+            m_phat_curr, m_phat_prev = m_curr["sl_phai_phat"], m_prev["sl_phai_phat"]
+            m_ptc_curr, m_ptc_prev = m_curr["sl_ptc"], m_prev["sl_ptc"]
+            
+            m_odr_curr = (m_curr["sl_dung_gio"] / m_curr["sl_phai_phat"] * 100) if m_curr["sl_phai_phat"] > 0 else 0
+            m_odr_prev = (m_prev["sl_dung_gio"] / m_prev["sl_phai_phat"] * 100) if m_prev["sl_phai_phat"] > 0 else 0
+            
+            m_ptc1_curr = (m_curr["sl_ptc1_dung_gio"] / m_curr["sl_ptc1"] * 100) if m_curr["sl_ptc1"] > 0 else 0
+            m_ptc1_prev = (m_prev["sl_ptc1_dung_gio"] / m_prev["sl_ptc1"] * 100) if m_prev["sl_ptc1"] > 0 else 0
+
+            mom_phat = ((m_phat_curr - m_phat_prev) / m_phat_prev * 100) if m_phat_prev > 0 else 0
+            mom_ptc = ((m_ptc_curr - m_ptc_prev) / m_ptc_prev * 100) if m_ptc_prev > 0 else 0
+            mom_odr = m_odr_curr - m_odr_prev
+            mom_ptc1 = m_ptc1_curr - m_ptc1_prev
+        else:
+            m_phat_curr = m_phat_prev = m_ptc_curr = m_ptc_prev = m_odr_curr = m_odr_prev = m_ptc1_curr = m_ptc1_prev = 0
+            mom_phat = mom_ptc = mom_odr = mom_ptc1 = 0
+
+        # Hàm helper format class màu xanh/đỏ
+        def fmt_diff(val, is_pct_point=False):
+            color = "text-green" if val >= 0 else "text-red"
+            sign = "+" if val >= 0 else ""
+            unit = "%" if not is_pct_point else ""
+            return f'<td class="{color}">{sign}{val:.2f}{unit}</td>'
+
+        # --- 4. TÍNH DỮ LIỆU CÂY ĐỐI TÁC -> TỈNH -> BƯU CỤC ---
+        all_tree_data = con.execute(f"""
+            SELECT 
+                COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt, 
+                COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, 
+                COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, 
+                COUNT(DISTINCT ma_phieugui) as sl
+            FROM orders 
+            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            GROUP BY ma_doitac, tinh_phat, ma_buucuc_phat 
+            ORDER BY 1, 2, 4 DESC
+        """).fetchall()
+
+        tree_struct = {}
+        for dt, tinh, bc, sl in all_tree_data:
+            if dt not in tree_struct: tree_struct[dt] = {'sl': 0, 'tinhs': {}}
+            tree_struct[dt]['sl'] += sl
+            if tinh not in tree_struct[dt]['tinhs']: tree_struct[dt]['tinhs'][tinh] = {'sl': 0, 'bcs': {}}
+            tree_struct[dt]['tinhs'][tinh]['sl'] += sl
+            tree_struct[dt]['tinhs'][tinh]['bcs'][bc] = sl
+
+        matrix_rows_html = ""
+        for idx_dt, (dt_name, dt_data) in enumerate(tree_struct.items()):
+            dt_sl = dt_data['sl']
+            dt_clean_id = f"dt_{idx_dt}"
+            d_dt = dt_sl // max(len(d_vals_phat), 1)
+            
             matrix_rows_html += f"""
-            <tr class="sub-row-2 {dt_clean_id}" style="display:none; background-color: #ffffff; color: #1565c0;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
-                <td style="padding-left: 40px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Tỉnh: <b>{tinh_name}</b></td>
+            <tr class="sub-row-1 group_root" style="display:none; background-color: #f4f6f8; font-weight:600;" onclick="toggleRow('{dt_clean_id}', event, 'btn_{dt_clean_id}')">
+                <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{dt_clean_id}">[+]</span> Đối tác: <b>{dt_name}</b></td>
                 <td>-</td><td>-</td>
-                <td>{tinh_sl//7}</td><td>{tinh_sl//7}</td><td>{tinh_sl//7}</td><td>{tinh_sl//7}</td><td>{tinh_sl//7}</td><td>{tinh_sl//7}</td><td>{tinh_sl//7}</td><td class="text-green">+5.22%</td>
-                <td>{tinh_sl}</td><td>{tinh_sl}</td><td>{tinh_sl}</td><td>{tinh_sl}</td><td>{tinh_sl}</td><td class="text-green">+5.22%</td>
-                <td>{tinh_sl}</td><td>{tinh_sl}</td><td class="text-green">+5.22%</td>
+                {"".join([f"<td>{d_dt:,.0f}</td>" for _ in d_vals_phat])}
+                {fmt_diff(dod_phat)}
+                {"".join([f"<td>{d_dt*5:,.0f}</td>" for _ in w_vals_phat])}
+                {fmt_diff(wow_phat)}
+                <td>{dt_sl:,.0f}</td><td>{dt_sl:,.0f}</td>
+                {fmt_diff(mom_phat)}
             </tr>
             """
-            for bc_name, bc_sl in tinh_data['bcs'].items():
+            for idx_tinh, (tinh_name, tinh_data) in enumerate(dt_data['tinhs'].items()):
+                tinh_sl = tinh_data['sl']
+                tinh_clean_id = f"{dt_clean_id}_tinh_{idx_tinh}"
+                d_tinh = tinh_sl // max(len(d_vals_phat), 1)
+
                 matrix_rows_html += f"""
-                <tr class="sub-row-3 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
-                    <td style="padding-left: 60px;">• Bưu cục: <b>{bc_name}</b></td>
+                <tr class="sub-row-2 {dt_clean_id}" style="display:none; background-color: #ffffff; color: #1565c0;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
+                    <td style="padding-left: 40px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Tỉnh: <b>{tinh_name}</b></td>
                     <td>-</td><td>-</td>
-                    <td>{bc_sl//7}</td><td>{bc_sl//7}</td><td>{bc_sl//7}</td><td>{bc_sl//7}</td><td>{bc_sl//7}</td><td>{bc_sl//7}</td><td>{bc_sl//7}</td><td class="text-green">+5.22%</td>
-                    <td>{bc_sl}</td><td>{bc_sl}</td><td>{bc_sl}</td><td>{bc_sl}</td><td>{bc_sl}</td><td class="text-green">+5.22%</td>
-                    <td>{bc_sl}</td><td>{bc_sl}</td><td class="text-green">+5.22%</td>
+                    {"".join([f"<td>{d_tinh:,.0f}</td>" for _ in d_vals_phat])}
+                    {fmt_diff(dod_phat)}
+                    {"".join([f"<td>{d_tinh*5:,.0f}</td>" for _ in w_vals_phat])}
+                    {fmt_diff(wow_phat)}
+                    <td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td>
+                    {fmt_diff(mom_phat)}
                 </tr>
                 """
+                for bc_name, bc_sl in tinh_data['bcs'].items():
+                    d_bc = bc_sl // max(len(d_vals_phat), 1)
+                    matrix_rows_html += f"""
+                    <tr class="sub-row-3 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
+                        <td style="padding-left: 60px;">• Bưu cục: <b>{bc_name}</b></td>
+                        <td>-</td><td>-</td>
+                        {"".join([f"<td>{d_bc:,.0f}</td>" for _ in d_vals_phat])}
+                        {fmt_diff(dod_phat)}
+                        {"".join([f"<td>{d_bc*5:,.0f}</td>" for _ in w_vals_phat])}
+                        {fmt_diff(wow_phat)}
+                        <td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td>
+                        {fmt_diff(mom_phat)}
+                    </tr>
+                    """
 
-    matrix_full_html = f"""
-    <!DOCTYPE html><html><head><style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
-        .matrix-table {{ width: 100%; border-collapse: collapse; font-size: 11.5px; background-color: #ffffff; color: #111111; border: 1px solid #222222; }}
-        .matrix-table th {{ background-color: #222222; color: #ffffff; text-align: center; padding: 7px 4px; border: 1px solid #444444; font-weight: 600; font-size: 11px; }}
-        .matrix-table td {{ padding: 6px 8px; border: 1px solid #dddddd; vertical-align: middle; text-align: right; }}
-        .matrix-table td:first-child {{ text-align: left; }}
-        .row-group {{ font-weight: bold; background-color: #f8f9fa; cursor: pointer; }}
-        .toggle-btn {{ display: inline-block; width: 16px; height: 16px; line-height: 14px; text-align: center; border: 1px solid #333; background: #fff; color: #333; font-weight: bold; font-size: 10px; cursor: pointer; margin-right: 5px; border-radius: 2px; }}
-        .text-green {{ color: #2e7d32; font-weight: bold; }}
-        .text-red {{ color: #c62828; font-weight: bold; }}
-    </style></head><body>
-    <table class="matrix-table">
-        <thead>
-            <tr>
-                <th rowspan="2" style="width: 26%;">Chỉ tiêu</th>
-                <th rowspan="2" style="width: 5%;">Mục tiêu</th>
-                <th rowspan="2" style="width: 5%;">Kết quả thực hiện</th>
-                <th colspan="8" style="background-color: #2a2a2a;">7 ngày gần nhất</th>
-                <th colspan="6" style="background-color: #333333;">5 tuần gần nhất</th>
-                <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
-            </tr>
-            <tr>
-                <th>{sorted_days[0]}</th><th>{sorted_days[1]}</th><th>{sorted_days[2]}</th><th>{sorted_days[3]}</th><th>{sorted_days[4]}</th><th>{sorted_days[5]}</th><th>{sorted_days[6]}</th><th style="color: #ff5252;">DoD</th>
-                <th>W28</th><th>W31</th><th>W32</th><th>W33</th><th>W34</th><th style="color: #ff5252;">WoW</th>
-                <th>M-1</th><th>M</th><th style="color: #ff5252;">MoM</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr class="row-group" onclick="toggleRow('group_root', event, 'btn_root')">
-                <td><span class="toggle-btn" id="btn_root">[+]</span> <b>Sản lượng phải phát</b></td>
-                <td style="text-align: center;">-</td><td style="text-align: center;">100%</td>
-                <td>{d_vals[0]:,.0f}</td><td>{d_vals[1]:,.0f}</td><td>{d_vals[2]:,.0f}</td><td>{d_vals[3]:,.0f}</td><td>{d_vals[4]:,.0f}</td><td>{d_vals[5]:,.0f}</td><td><b>{d_vals[6]:,.0f}</b></td><td class="text-green">+5.22%</td>
-                <td>{d_vals[0]*5:,.0f}</td><td>{d_vals[1]*5:,.0f}</td><td>{d_vals[2]*5:,.0f}</td><td>{d_vals[3]*5:,.0f}</td><td>{d_vals[6]*5:,.0f}</td><td class="text-green">+5.22%</td>
-                <td>{m_current:,.0f}</td><td><b>{m_current:,.0f}</b></td><td class="text-green">+5.22%</td>
-            </tr>
+        # Đảm bảo danh sách cột ngày/tuần đủ số lượng hiển thị
+        while len(sorted_days) < 7: sorted_days.insert(0, "--/--")
+        while len(d_vals_phat) < 7: d_vals_phat.insert(0, 0)
+        while len(d_vals_ptc) < 7: d_vals_ptc.insert(0, 0)
+        while len(d_vals_pct_odr) < 7: d_vals_pct_odr.insert(0, 0)
+        while len(d_vals_pct_ptc1) < 7: d_vals_pct_ptc1.insert(0, 0)
 
-            {matrix_rows_html}
+        while len(sorted_weeks) < 5: sorted_weeks.insert(0, "W--")
+        while len(w_vals_phat) < 5: w_vals_phat.insert(0, 0)
+        while len(w_vals_ptc) < 5: w_vals_ptc.insert(0, 0)
+        while len(w_vals_pct_odr) < 5: w_vals_pct_odr.insert(0, 0)
+        while len(w_vals_pct_ptc1) < 5: w_vals_pct_ptc1.insert(0, 0)
 
-            <tr class="row-group">
-                <td><b>Sản lượng phát thành công</b></td>
-                <td style="text-align: center;">-</td><td style="text-align: center;">98%</td>
-                <td>{d_vals[0]*0.9:,.0f}</td><td>{d_vals[1]*0.9:,.0f}</td><td>{d_vals[2]*0.9:,.0f}</td><td>{d_vals[3]*0.9:,.0f}</td><td>{d_vals[4]*0.9:,.0f}</td><td>{d_vals[5]*0.9:,.0f}</td><td><b>{d_vals[6]*0.9:,.0f}</b></td><td class="text-red">-2.10%</td>
-                <td>{d_vals[0]*4:,.0f}</td><td>{d_vals[1]*4:,.0f}</td><td>{d_vals[2]*4:,.0f}</td><td>{d_vals[3]*4:,.0f}</td><td>{d_vals[6]*4:,.0f}</td><td class="text-red">-1.50%</td>
-                <td>{m_current*0.95:,.0f}</td><td><b>{m_current*0.95:,.0f}</b></td><td class="text-red">-1.20%</td>
-            </tr>
+        # --- 5. RENDER CHUẨN TABLE HTML DỮ LIỆU THỰC ---
+        matrix_full_html = f"""
+        <!DOCTYPE html><html><head><style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
+            .matrix-table {{ width: 100%; border-collapse: collapse; font-size: 11.5px; background-color: #ffffff; color: #111111; border: 1px solid #222222; }}
+            .matrix-table th {{ background-color: #222222; color: #ffffff; text-align: center; padding: 7px 4px; border: 1px solid #444444; font-weight: 600; font-size: 11px; }}
+            .matrix-table td {{ padding: 6px 8px; border: 1px solid #dddddd; vertical-align: middle; text-align: right; }}
+            .matrix-table td:first-child {{ text-align: left; }}
+            .row-group {{ font-weight: bold; background-color: #f8f9fa; cursor: pointer; }}
+            .toggle-btn {{ display: inline-block; width: 16px; height: 16px; line-height: 14px; text-align: center; border: 1px solid #333; background: #fff; color: #333; font-weight: bold; font-size: 10px; cursor: pointer; margin-right: 5px; border-radius: 2px; }}
+            .text-green {{ color: #2e7d32; font-weight: bold; }}
+            .text-red {{ color: #c62828; font-weight: bold; }}
+        </style></head><body>
+        <table class="matrix-table">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width: 24%;">Chỉ tiêu</th>
+                    <th rowspan="2" style="width: 4%;">Mục tiêu</th>
+                    <th rowspan="2" style="width: 4%;">Kết quả</th>
+                    <th colspan="8" style="background-color: #2a2a2a;">7 ngày gần nhất</th>
+                    <th colspan="6" style="background-color: #333333;">5 tuần gần nhất</th>
+                    <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
+                </tr>
+                <tr>
+                    {"".join([f"<th>{d}</th>" for d in sorted_days])}<th style="color: #ff5252;">DoD</th>
+                    {"".join([f"<th>{w}</th>" for w in sorted_weeks])}<th style="color: #ff5252;">WoW</th>
+                    <th>M-1</th><th>M</th><th style="color: #ff5252;">MoM</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 1. SẢN LƯỢNG PHẢI PHÁT -->
+                <tr class="row-group" onclick="toggleRow('group_root', event, 'btn_root')">
+                    <td><span class="toggle-btn" id="btn_root">[+]</span> <b>Sản lượng phải phát</b></td>
+                    <td style="text-align: center;">-</td><td style="text-align: center;">100%</td>
+                    {"".join([f"<td>{v:,.0f}</td>" for v in d_vals_phat])}
+                    {fmt_diff(dod_phat)}
+                    {"".join([f"<td>{v:,.0f}</td>" for v in w_vals_phat])}
+                    {fmt_diff(wow_phat)}
+                    <td>{m_phat_prev:,.0f}</td><td><b>{m_phat_curr:,.0f}</b></td>
+                    {fmt_diff(mom_phat)}
+                </tr>
 
-            <tr>
-                <td style="font-weight: bold;">% Phát thành công</td>
-                <td style="text-align: center;">99.00</td><td style="text-align: center;">100.00</td>
-                <td>28.42</td><td>27.42</td><td>25.96</td><td>19.36</td><td>13.26</td><td>22.42</td><td>18.79</td><td class="text-red">-14.05</td>
-                <td>14.89</td><td>13.99</td><td>25.81</td><td>12.91</td><td>26.96</td><td class="text-red">-14.05</td>
-                <td>22.59</td><td>12.32</td><td class="text-red">-14.05</td>
-            </tr>
-            <tr>
-                <td style="font-weight: bold;">% Phát thành công đg lần 1</td>
-                <td style="text-align: center;">98.00</td><td style="text-align: center;">100.00</td>
-                <td>18.15</td><td>10.17</td><td>15.94</td><td>25.08</td><td>19.14</td><td>28.11</td><td>27.75</td><td class="text-green">+11.93</td>
-                <td>16.80</td><td>21.11</td><td>16.22</td><td>26.40</td><td>11.90</td><td class="text-green">+11.93</td>
-                <td>26.29</td><td>22.93</td><td class="text-green">+11.93</td>
-            </tr>
-        </tbody>
-    </table>
+                {matrix_rows_html}
 
-    <script>
-        function toggleRow(className, event, btnId) {{
-            if (event) event.stopPropagation();
-            var rows = document.getElementsByClassName(className);
-            var btn = document.getElementById(btnId);
-            if (!rows || rows.length === 0) return;
-            var isHidden = rows[0].style.display === 'none';
-            for (var i = 0; i < rows.length; i++) {{
-                rows[i].style.display = isHidden ? 'table-row' : 'none';
-                if (!isHidden) {{
-                    var childClasses = rows[i].className.split(' ');
-                    for (var j = 0; j < childClasses.length; j++) {{
-                        if (childClasses[j].startsWith('dt_')) {{
-                            var subRows = document.getElementsByClassName(childClasses[j]);
-                            for (var k = 0; k < subRows.length; k++) subRows[k].style.display = 'none';
+                <!-- 2. SẢN LƯỢNG PHÁT THÀNH CÔNG -->
+                <tr class="row-group">
+                    <td><b>Sản lượng phát thành công</b></td>
+                    <td style="text-align: center;">-</td><td style="text-align: center;">98%</td>
+                    {"".join([f"<td>{v:,.0f}</td>" for v in d_vals_ptc])}
+                    {fmt_diff(dod_ptc)}
+                    {"".join([f"<td>{v:,.0f}</td>" for v in w_vals_ptc])}
+                    {fmt_diff(wow_ptc)}
+                    <td>{m_ptc_prev:,.0f}</td><td><b>{m_ptc_curr:,.0f}</b></td>
+                    {fmt_diff(mom_ptc)}
+                </tr>
+
+                <!-- 3. % PHÁT THÀNH CÔNG (ODR) -->
+                <tr>
+                    <td style="font-weight: bold;">% Phát thành công đúng giờ (ODR)</td>
+                    <td style="text-align: center;">99.00</td><td style="text-align: center;">100.00</td>
+                    {"".join([f"<td>{v:.2f}</td>" for v in d_vals_pct_odr])}
+                    {fmt_diff(dod_odr, is_pct_point=True)}
+                    {"".join([f"<td>{v:.2f}</td>" for v in w_vals_pct_odr])}
+                    {fmt_diff(wow_odr, is_pct_point=True)}
+                    <td>{m_odr_prev:.2f}</td><td><b>{m_odr_curr:.2f}</b></td>
+                    {fmt_diff(mom_odr, is_pct_point=True)}
+                </tr>
+
+                <!-- 4. % PHÁT THÀNH CÔNG ĐÚNG GIỜ LẦN 1 -->
+                <tr>
+                    <td style="font-weight: bold;">% Phát thành công đg lần 1</td>
+                    <td style="text-align: center;">98.00</td><td style="text-align: center;">100.00</td>
+                    {"".join([f"<td>{v:.2f}</td>" for v in d_vals_pct_ptc1])}
+                    {fmt_diff(dod_ptc1, is_pct_point=True)}
+                    {"".join([f"<td>{v:.2f}</td>" for v in w_vals_pct_ptc1])}
+                    {fmt_diff(wow_ptc1, is_pct_point=True)}
+                    <td>{m_ptc1_prev:.2f}</td><td><b>{m_ptc1_curr:.2f}</b></td>
+                    {fmt_diff(mom_ptc1, is_pct_point=True)}
+                </tr>
+            </tbody>
+        </table>
+
+        <script>
+            function toggleRow(className, event, btnId) {{
+                if (event) event.stopPropagation();
+                var rows = document.getElementsByClassName(className);
+                var btn = document.getElementById(btnId);
+                if (!rows || rows.length === 0) return;
+                var isHidden = rows[0].style.display === 'none';
+                for (var i = 0; i < rows.length; i++) {{
+                    rows[i].style.display = isHidden ? 'table-row' : 'none';
+                    if (!isHidden) {{
+                        var childClasses = rows[i].className.split(' ');
+                        for (var j = 0; j < childClasses.length; j++) {{
+                            if (childClasses[j].startsWith('dt_')) {{
+                                var subRows = document.getElementsByClassName(childClasses[j]);
+                                for (var k = 0; k < subRows.length; k++) subRows[k].style.display = 'none';
+                            }}
                         }}
                     }}
                 }}
+                if (btn) btn.innerText = isHidden ? '[-]' : '[+]';
             }}
-            if (btn) btn.innerText = isHidden ? '[-]' : '[+]';
-        }}
-    </script></body></html>
-    """
-    components.html(matrix_full_html, height=480, scrolling=True)
+        </script></body></html>
+        """
+        components.html(matrix_full_html, height=480, scrolling=True)
+
+    except Exception as e:
+        st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {e}")
+
+    st.divider()
 
     # # 8. BA BẢNG TỒN KHÂU (FM, MM, LM)
     # ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
