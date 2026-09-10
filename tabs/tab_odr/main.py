@@ -562,32 +562,45 @@ def render(file_id: str):
 
     st.divider()
 
- # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (ĐÃ XÓA MỤC TIÊU/KẾT QUẢ & CẬP NHẬT TÍNH PTC1)
+ # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX TRIỆT ĐỂ LỆCH VÀ TRÙNG CỘT THÁNG)
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
-        # 1. LẤY MỐC THỜI GIAN NGÀY / TUẦN / THÁNG (ÉP KHÓA VỀ VARCHAR)
+        # 1. LẤY MỐC THỜI GIAN NGÀY / TUẦN / THÁNG CHUẨN
         days_df = con.execute(f"""
-            SELECT CAST(CAST(tg_ptc AS DATE) AS VARCHAR) as dt, STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label
+            SELECT 
+                CAST(CAST(tg_ptc AS DATE) AS VARCHAR) as dt, 
+                STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 7
         """).fetchdf()
 
         day_cols = days_df["dt"].tolist()[::-1] if days_df is not None and not days_df.empty else []
-        day_labels = days_df["dt_label"].tolist()[::-1] if days_df is not None and not days_df.empty else ["--/--"] * 7
+        day_labels = days_df["dt_label"].tolist()[::-1] if days_df is not None and not days_df.empty else []
 
         weeks_df = con.execute(f"""
             SELECT 
-                'W' || STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%W') as week_label,
-                CAST(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE) AS VARCHAR) as min_date
+                CAST(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE) AS VARCHAR) as min_date,
+                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%W') as week_label
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
-            GROUP BY 1, 2 ORDER BY min_date DESC LIMIT 5
+            GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 5
         """).fetchdf()
 
         week_cols = weeks_df["min_date"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
-        week_labels = weeks_df["week_label"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else ["W--"] * 5
+        week_labels = weeks_df["week_label"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
 
-        # 2. AGGREGATE BẢNG TỔNG (CỦA CÁC CHỈ TIÊU TỔNG HỢP)
+        # Lấy 2 mốc tháng gần nhất (M-1 và M)
+        months_df = con.execute(f"""
+            SELECT DISTINCT STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key
+            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
+            ORDER BY 1 DESC LIMIT 2
+        """).fetchdf()
+
+        month_cols = months_df["m_key"].tolist()[::-1] if months_df is not None and not months_df.empty else []
+        while len(month_cols) < 2:
+            month_cols.insert(0, f"M_empty_{len(month_cols)}")  # Tránh lỗi thiếu phần tử
+
+        # 2. AGGREGATE BẢNG TỔNG
         df_d = con.execute(f"""
             SELECT 
                 CAST(CAST(tg_ptc AS DATE) AS VARCHAR) as d_key,
@@ -602,7 +615,7 @@ def render(file_id: str):
 
         df_w = con.execute(f"""
             SELECT 
-                CAST(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE) AS VARCHAR) as w_key,
+                CAST(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE) AS VARCHAR) as w_key,
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
                 ROUND(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 THEN ma_phieugui END), 0), 2) as ptc1,
@@ -621,11 +634,12 @@ def render(file_id: str):
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
-            GROUP BY 1 ORDER BY 1 DESC LIMIT 2
+            GROUP BY 1
         """).fetchdf()
 
         dict_d = {str(row.d_key): row for row in df_d.itertuples()} if df_d is not None and not df_d.empty else {}
         dict_w = {str(row.w_key): row for row in df_w.itertuples()} if df_w is not None and not df_w.empty else {}
+        dict_m = {str(row.m_key): row for row in df_m.itertuples()} if df_m is not None and not df_m.empty else {}
 
         def get_v_fast(d_map, key, field_idx):
             k_str = str(key)
@@ -646,8 +660,12 @@ def render(file_id: str):
         v_w_in   = [get_v_fast(dict_w, w, 5) for w in week_cols]
         v_w_next = [get_v_fast(dict_w, w, 6) for w in week_cols]
 
-        m_c = df_m.iloc[0].to_dict() if df_m is not None and len(df_m) > 0 else {}
-        m_p = df_m.iloc[1].to_dict() if df_m is not None and len(df_m) > 1 else m_c
+        # Khóa giá trị tháng M-1 và M chính xác
+        v_m_phat = [get_v_fast(dict_m, m, 2) for m in month_cols]
+        v_m_odr  = [get_v_fast(dict_m, m, 3) for m in month_cols]
+        v_m_ptc1 = [get_v_fast(dict_m, m, 4) for m in month_cols]
+        v_m_in   = [get_v_fast(dict_m, m, 5) for m in month_cols]
+        v_m_next = [get_v_fast(dict_m, m, 6) for m in month_cols]
 
         def fmt_diff(val, is_pct=False):
             color = "text-green" if val >= 0 else "text-red"
@@ -657,25 +675,25 @@ def render(file_id: str):
 
         dod_p = ((v_d_phat[-1] - v_d_phat[-2])/v_d_phat[-2]*100) if len(v_d_phat)>1 and v_d_phat[-2]>0 else 0
         wow_p = ((v_w_phat[-1] - v_w_phat[-2])/v_w_phat[-2]*100) if len(v_w_phat)>1 and v_w_phat[-2]>0 else 0
-        mom_p = ((m_c.get("phat",0) - m_p.get("phat",0))/m_p.get("phat",1)*100) if m_p.get("phat",0)>0 else 0
+        mom_p = ((v_m_phat[1] - v_m_phat[0])/v_m_phat[0]*100) if v_m_phat[0]>0 else 0
 
         dod_odr = v_d_odr[-1] - v_d_odr[-2] if len(v_d_odr)>1 else 0
         wow_odr = v_w_odr[-1] - v_w_odr[-2] if len(v_w_odr)>1 else 0
-        mom_odr = m_c.get("odr",0) - m_p.get("odr",0)
+        mom_odr = v_m_odr[1] - v_m_odr[0]
 
         dod_ptc1 = v_d_ptc1[-1] - v_d_ptc1[-2] if len(v_d_ptc1)>1 else 0
         wow_ptc1 = v_w_ptc1[-1] - v_w_ptc1[-2] if len(v_w_ptc1)>1 else 0
-        mom_ptc1 = m_c.get("ptc1",0) - m_p.get("ptc1",0)
+        mom_ptc1 = v_m_ptc1[1] - v_m_ptc1[0]
 
         dod_in = v_d_in[-1] - v_d_in[-2] if len(v_d_in)>1 else 0
         wow_in = v_w_in[-1] - v_w_in[-2] if len(v_w_in)>1 else 0
-        mom_in = m_c.get("inday",0) - m_p.get("inday",0)
+        mom_in = v_m_in[1] - v_m_in[0]
 
         dod_next = v_d_next[-1] - v_d_next[-2] if len(v_d_next)>1 else 0
         wow_next = v_w_next[-1] - v_w_next[-2] if len(v_w_next)>1 else 0
-        mom_next = m_c.get("nextday",0) - m_p.get("nextday",0)
+        mom_next = v_m_next[1] - v_m_next[0]
 
-        # 3. TRUY VẤN CÂY DỮ LIỆU ĐỐI TÁC / TỈNH / BƯU CỤC
+        # 3. TRUY VẤN CÂY DỮ LIỆU ĐỐI TÁC / TỈNH / BƯU CỤC (BAO GỒM NGÀY & TUẦN & THÁNG)
         tree_day_df = con.execute(f"""
             SELECT 
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
@@ -692,7 +710,18 @@ def render(file_id: str):
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
                 COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
                 COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc,
-                CAST(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE) AS VARCHAR) as w_key,
+                CAST(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE) AS VARCHAR) as w_key,
+                COUNT(DISTINCT ma_phieugui) as sl
+            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            GROUP BY 1, 2, 3, 4
+        """).fetchdf()
+
+        tree_month_df = con.execute(f"""
+            SELECT 
+                COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
+                COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
+                COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc,
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key,
                 COUNT(DISTINCT ma_phieugui) as sl
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
             GROUP BY 1, 2, 3, 4
@@ -701,22 +730,23 @@ def render(file_id: str):
         map_dt_d, map_tinh_d, map_bc_d = {}, {}, {}
         if tree_day_df is not None and not tree_day_df.empty:
             for r in tree_day_df.itertuples():
-                k_dt = (str(r.dt), str(r.d_key))
-                k_tinh = (str(r.dt), str(r.tinh), str(r.d_key))
-                k_bc = (str(r.dt), str(r.tinh), str(r.bc), str(r.d_key))
-                map_dt_d[k_dt] = map_dt_d.get(k_dt, 0) + r.sl
-                map_tinh_d[k_tinh] = map_tinh_d.get(k_tinh, 0) + r.sl
-                map_bc_d[k_bc] = map_bc_d.get(k_bc, 0) + r.sl
+                map_dt_d[(str(r.dt), str(r.d_key))] = map_dt_d.get((str(r.dt), str(r.d_key)), 0) + r.sl
+                map_tinh_d[(str(r.dt), str(r.tinh), str(r.d_key))] = map_tinh_d.get((str(r.dt), str(r.tinh), str(r.d_key)), 0) + r.sl
+                map_bc_d[(str(r.dt), str(r.tinh), str(r.bc), str(r.d_key))] = map_bc_d.get((str(r.dt), str(r.tinh), str(r.bc), str(r.d_key)), 0) + r.sl
 
         map_dt_w, map_tinh_w, map_bc_w = {}, {}, {}
         if tree_week_df is not None and not tree_week_df.empty:
             for r in tree_week_df.itertuples():
-                k_dt = (str(r.dt), str(r.w_key))
-                k_tinh = (str(r.dt), str(r.tinh), str(r.w_key))
-                k_bc = (str(r.dt), str(r.tinh), str(r.bc), str(r.w_key))
-                map_dt_w[k_dt] = map_dt_w.get(k_dt, 0) + r.sl
-                map_tinh_w[k_tinh] = map_tinh_w.get(k_tinh, 0) + r.sl
-                map_bc_w[k_bc] = map_bc_w.get(k_bc, 0) + r.sl
+                map_dt_w[(str(r.dt), str(r.w_key))] = map_dt_w.get((str(r.dt), str(r.w_key)), 0) + r.sl
+                map_tinh_w[(str(r.dt), str(r.tinh), str(r.w_key))] = map_tinh_w.get((str(r.dt), str(r.tinh), str(r.w_key)), 0) + r.sl
+                map_bc_w[(str(r.dt), str(r.tinh), str(r.bc), str(r.w_key))] = map_bc_w.get((str(r.dt), str(r.tinh), str(r.bc), str(r.w_key)), 0) + r.sl
+
+        map_dt_m, map_tinh_m, map_bc_m = {}, {}, {}
+        if tree_month_df is not None and not tree_month_df.empty:
+            for r in tree_month_df.itertuples():
+                map_dt_m[(str(r.dt), str(r.m_key))] = map_dt_m.get((str(r.dt), str(r.m_key)), 0) + r.sl
+                map_tinh_m[(str(r.dt), str(r.tinh), str(r.m_key))] = map_tinh_m.get((str(r.dt), str(r.tinh), str(r.m_key)), 0) + r.sl
+                map_bc_m[(str(r.dt), str(r.tinh), str(r.bc), str(r.m_key))] = map_bc_m.get((str(r.dt), str(r.tinh), str(r.bc), str(r.m_key)), 0) + r.sl
 
         tree_struct_df = con.execute(f"""
             SELECT DISTINCT 
@@ -742,10 +772,11 @@ def render(file_id: str):
             
             d_vals_dt = [map_dt_d.get((dt_name, str(d)), 0) for d in day_cols]
             w_vals_dt = [map_dt_w.get((dt_name, str(w)), 0) for w in week_cols]
+            m_vals_dt = [map_dt_m.get((dt_name, str(m)), 0) for m in month_cols]
             
-            sl_dt_m = sum(d_vals_dt)
             dod_dt = ((d_vals_dt[-1] - d_vals_dt[-2])/d_vals_dt[-2]*100) if len(d_vals_dt)>1 and d_vals_dt[-2]>0 else 0
             wow_dt = ((w_vals_dt[-1] - w_vals_dt[-2])/w_vals_dt[-2]*100) if len(w_vals_dt)>1 and w_vals_dt[-2]>0 else 0
+            mom_dt = ((m_vals_dt[1] - m_vals_dt[0])/m_vals_dt[0]*100) if m_vals_dt[0]>0 else 0
 
             d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_dt])
             w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_dt])
@@ -753,7 +784,7 @@ def render(file_id: str):
             matrix_rows_list.append(f"""
             <tr class="sub-row-1 group_root" style="display:none; background-color: #f4f6f8; font-weight:600;" onclick="toggleRow('{dt_clean_id}', event, 'btn_{dt_clean_id}')">
                 <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{dt_clean_id}">[+]</span> Đối tác: <b>{dt_name}</b></td>
-                {d_cells}{fmt_diff(dod_dt)}{w_cells}{fmt_diff(wow_dt)}<td>{sl_dt_m:,.0f}</td><td>{sl_dt_m:,.0f}</td>{fmt_diff(0)}
+                {d_cells}{fmt_diff(dod_dt)}{w_cells}{fmt_diff(wow_dt)}<td>{m_vals_dt[0]:,.0f}</td><td><b>{m_vals_dt[1]:,.0f}</b></td>{fmt_diff(mom_dt)}
             </tr>
             """)
 
@@ -762,10 +793,11 @@ def render(file_id: str):
                 
                 d_vals_tinh = [map_tinh_d.get((dt_name, tinh_name, str(d)), 0) for d in day_cols]
                 w_vals_tinh = [map_tinh_w.get((dt_name, tinh_name, str(w)), 0) for w in week_cols]
+                m_vals_tinh = [map_tinh_m.get((dt_name, tinh_name, str(m)), 0) for m in month_cols]
                 
-                sl_tinh_m = sum(d_vals_tinh)
                 dod_tinh = ((d_vals_tinh[-1] - d_vals_tinh[-2])/d_vals_tinh[-2]*100) if len(d_vals_tinh)>1 and d_vals_tinh[-2]>0 else 0
                 wow_tinh = ((w_vals_tinh[-1] - w_vals_tinh[-2])/w_vals_tinh[-2]*100) if len(w_vals_tinh)>1 and w_vals_tinh[-2]>0 else 0
+                mom_tinh = ((m_vals_tinh[1] - m_vals_tinh[0])/m_vals_tinh[0]*100) if m_vals_tinh[0]>0 else 0
 
                 t_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_tinh])
                 t_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_tinh])
@@ -773,17 +805,18 @@ def render(file_id: str):
                 matrix_rows_list.append(f"""
                 <tr class="sub-row-2 {dt_clean_id}" style="display:none; background-color: #ffffff; color: #1565c0;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
                     <td style="padding-left: 40px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Tỉnh: <b>{tinh_name}</b></td>
-                    {t_d_cells}{fmt_diff(dod_tinh)}{t_w_cells}{fmt_diff(wow_tinh)}<td>{sl_tinh_m:,.0f}</td><td>{sl_tinh_m:,.0f}</td>{fmt_diff(0)}
+                    {t_d_cells}{fmt_diff(dod_tinh)}{t_w_cells}{fmt_diff(wow_tinh)}<td>{m_vals_tinh[0]:,.0f}</td><td><b>{m_vals_tinh[1]:,.0f}</b></td>{fmt_diff(mom_tinh)}
                 </tr>
                 """)
 
                 for bc_name in bcs_list:
                     d_vals_bc = [map_bc_d.get((dt_name, tinh_name, bc_name, str(d)), 0) for d in day_cols]
                     w_vals_bc = [map_bc_w.get((dt_name, tinh_name, bc_name, str(w)), 0) for w in week_cols]
+                    m_vals_bc = [map_bc_m.get((dt_name, tinh_name, bc_name, str(m)), 0) for m in month_cols]
                     
-                    sl_bc_m = sum(d_vals_bc)
                     dod_bc = ((d_vals_bc[-1] - d_vals_bc[-2])/d_vals_bc[-2]*100) if len(d_vals_bc)>1 and d_vals_bc[-2]>0 else 0
                     wow_bc = ((w_vals_bc[-1] - w_vals_bc[-2])/w_vals_bc[-2]*100) if len(w_vals_bc)>1 and w_vals_bc[-2]>0 else 0
+                    mom_bc = ((m_vals_bc[1] - m_vals_bc[0])/m_vals_bc[0]*100) if m_vals_bc[0]>0 else 0
 
                     b_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_bc])
                     b_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_bc])
@@ -791,16 +824,16 @@ def render(file_id: str):
                     matrix_rows_list.append(f"""
                     <tr class="sub-row-3 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
                         <td style="padding-left: 60px;">• Bưu cục: <b>{bc_name}</b></td>
-                        {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{sl_bc_m:,.0f}</td><td>{sl_bc_m:,.0f}</td>{fmt_diff(0)}
+                        {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{m_vals_bc[0]:,.0f}</td><td><b>{m_vals_bc[1]:,.0f}</b></td>{fmt_diff(mom_bc)}
                     </tr>
                     """)
 
         matrix_rows_html = "".join(matrix_rows_list)
 
-        while len(day_labels) < 7: day_labels.insert(0, "--/--")
-        while len(week_labels) < 5: week_labels.insert(0, "W--")
+        n_day_cols = len(day_labels)
+        n_week_cols = len(week_labels)
 
-        # 4. RENDER HTML (KHÔNG BỎ MỤC TIÊU & KẾT QUẢ)
+        # 4. RENDER BẢNG HTML CHUẨN SỐ THÁNG & TUẦN 100%
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
@@ -817,8 +850,8 @@ def render(file_id: str):
             <thead>
                 <tr>
                     <th rowspan="2" style="width: 28%;">Chỉ tiêu</th>
-                    <th colspan="8" style="background-color: #2a2a2a;">7 ngày gần nhất</th>
-                    <th colspan="6" style="background-color: #333333;">5 tuần gần nhất</th>
+                    <th colspan="{n_day_cols + 1}" style="background-color: #2a2a2a;">{n_day_cols} ngày gần nhất</th>
+                    <th colspan="{n_week_cols + 1}" style="background-color: #333333;">{n_week_cols} tuần gần nhất</th>
                     <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
                 </tr>
                 <tr>
@@ -835,7 +868,7 @@ def render(file_id: str):
                     {fmt_diff(dod_p)}
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_w_phat])}
                     {fmt_diff(wow_p)}
-                    <td>{m_p.get('phat',0):,.0f}</td><td><b>{m_c.get('phat',0):,.0f}</b></td>
+                    <td>{v_m_phat[0]:,.0f}</td><td><b>{v_m_phat[1]:,.0f}</b></td>
                     {fmt_diff(mom_p)}
                 </tr>
 
@@ -848,7 +881,7 @@ def render(file_id: str):
                     {fmt_diff(dod_odr, is_pct=True)}
                     {"".join([f"<td>{v:.2f}</td>" for v in v_w_odr])}
                     {fmt_diff(wow_odr, is_pct=True)}
-                    <td>{m_p.get('odr',0):.2f}</td><td><b>{m_c.get('odr',0):.2f}</b></td>
+                    <td>{v_m_odr[0]:.2f}</td><td><b>{v_m_odr[1]:.2f}</b></td>
                     {fmt_diff(mom_odr, is_pct=True)}
                 </tr>
 
@@ -859,7 +892,7 @@ def render(file_id: str):
                     {fmt_diff(dod_ptc1, is_pct=True)}
                     {"".join([f"<td>{v:.2f}</td>" for v in v_w_ptc1])}
                     {fmt_diff(wow_ptc1, is_pct=True)}
-                    <td>{m_p.get('ptc1',0):.2f}</td><td><b>{m_c.get('ptc1',0):.2f}</b></td>
+                    <td>{v_m_ptc1[0]:.2f}</td><td><b>{v_m_ptc1[1]:.2f}</b></td>
                     {fmt_diff(mom_ptc1, is_pct=True)}
                 </tr>
 
@@ -870,7 +903,7 @@ def render(file_id: str):
                     {fmt_diff(dod_in, is_pct=True)}
                     {"".join([f"<td>{v:.2f}</td>" for v in v_w_in])}
                     {fmt_diff(wow_in, is_pct=True)}
-                    <td>{m_p.get('inday',0):.2f}</td><td><b>{m_c.get('inday',0):.2f}</b></td>
+                    <td>{v_m_in[0]:.2f}</td><td><b>{v_m_in[1]:.2f}</b></td>
                     {fmt_diff(mom_in, is_pct=True)}
                 </tr>
 
@@ -881,7 +914,7 @@ def render(file_id: str):
                     {fmt_diff(dod_next, is_pct=True)}
                     {"".join([f"<td>{v:.2f}</td>" for v in v_w_next])}
                     {fmt_diff(wow_next, is_pct=True)}
-                    <td>{m_p.get('nextday',0):.2f}</td><td><b>{m_c.get('nextday',0):.2f}</b></td>
+                    <td>{v_m_next[0]:.2f}</td><td><b>{v_m_next[1]:.2f}</b></td>
                     {fmt_diff(mom_next, is_pct=True)}
                 </tr>
             </tbody>
