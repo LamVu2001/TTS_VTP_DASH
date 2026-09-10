@@ -149,30 +149,60 @@ def render(file_id: str):
     pct_ptc_dung_gio = (tu_so_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
     pct_ptc1_dung_gio = (tu_so_lan1_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
 
-    # HIỂN THỊ 5 THẺ KPI
+    # HIỂN THỊ 5 THẺ KPI (ĐÃ BỎ CHỮ XANH, TĂNG KÍCH THƯỚC CHỮ)
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
+    
     with m_odr1: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHÁT</div><div class="metric-value">{tong_sl_phat:,.0f}</div><div class="metric-sub-green">▲ Thực tế</div></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+            <div class="metric-card" style="text-align: center; padding: 15px 10px;">
+                <div class="metric-title" style="font-size: 13px; font-weight: bold; color: #555555; margin-bottom: 8px;">SẢN LƯỢNG PHÁT</div>
+                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{tong_sl_phat:,.0f}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+        
     with m_odr2: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHÁT FAILED SLA</div><div class="metric-value">{sl_failed_sla:,.0f}</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+            <div class="metric-card" style="text-align: center; padding: 15px 10px;">
+                <div class="metric-title" style="font-size: 13px; font-weight: bold; color: #555555; margin-bottom: 8px;">SẢN LƯỢNG PHÁT FAILED SLA</div>
+                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{sl_failed_sla:,.0f}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+        
     with m_odr3: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT FAILED SLA</div><div class="metric-value">{pct_failed_sla:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+            <div class="metric-card" style="text-align: center; padding: 15px 10px;">
+                <div class="metric-title" style="font-size: 13px; font-weight: bold; color: #555555; margin-bottom: 8px;">TỶ LỆ PHÁT FAILED SLA</div>
+                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{pct_failed_sla:.1f}%</div>
+            </div>
+        ''', unsafe_allow_html=True)
+        
     with m_odr4: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div><div class="metric-value">{pct_ptc_dung_gio:.1f}%</div><div class="metric-sub-green">Theo ngày PTC</div></div>', unsafe_allow_html=True)
+        st.markdown(f'''
+            <div class="metric-card" style="text-align: center; padding: 15px 10px;">
+                <div class="metric-title" style="font-size: 13px; font-weight: bold; color: #555555; margin-bottom: 8px;">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div>
+                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{pct_ptc_dung_gio:.1f}%</div>
+            </div>
+        ''', unsafe_allow_html=True)
+        
     with m_odr5: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT ĐÚNG GIỜ LẦN 1</div><div class="metric-value">{pct_ptc1_dung_gio:.1f}%</div><div class="metric-sub-green">Theo ngày PTC</div></div>', unsafe_allow_html=True)
-
+        st.markdown(f'''
+            <div class="metric-card" style="text-align: center; padding: 15px 10px;">
+                <div class="metric-title" style="font-size: 13px; font-weight: bold; color: #555555; margin-bottom: 8px;">TỶ LỆ PHÁT ĐÚNG GIỜ LẦN 1</div>
+                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{pct_ptc1_dung_gio:.1f}%</div>
+            </div>
+        ''', unsafe_allow_html=True)
+        
     st.write("")
     
    # =========================================================================
     # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG VÀ TỶ TRỌNG CÁC KHÂU SAI
     # =========================================================================
     c_odr_chart, c_odr_right = st.columns([2, 1.3])
-    
-    # --- 5A. BIỂU ĐỒ TRÁI: XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ ODR ---
+
+    # --- BIỂU ĐỒ TRÁI: XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ ODR ---
     with c_odr_chart:
         st.subheader("📈 XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ ODR")
-        
+
         # Bộ lọc Chế độ xem nằm NGAY DƯỚI Tiêu đề
         time_view = st.radio(
             "Chế độ xem:",
@@ -180,11 +210,11 @@ def render(file_id: str):
             index=0,
             horizontal=True,
             key="chart_time_view",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
         )
 
         try:
-            # Thiết lập biểu thức SQL & Format Ngày/Tháng/Năm (không có Giờ)
+            # Quy chuẩn thời gian DuckDB & Định dạng hiển thị
             if time_view == "Tuần":
                 # Quy chuẩn Chủ Nhật -> Thứ 7 cho TikTok Shop
                 date_expr = "CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)"
@@ -196,7 +226,7 @@ def render(file_id: str):
                 date_expr = "CAST(tg_ptc AS DATE)"
                 date_format = "%d/%m/%Y"
 
-            # Truy vấn SQL tính Tỷ lệ Đúng giờ (%) thực tế thay vì luôn 100%
+            # SQL nhóm theo thời gian
             df_odr_daily = con.execute(f"""
                 SELECT 
                     STRFTIME({date_expr}, '{date_format}') as time_label, 
@@ -216,100 +246,117 @@ def render(file_id: str):
             if len(df_odr_daily) > 0:
                 fig_odr = make_subplots(specs=[[{"secondary_y": True}]])
 
-                # Line 1: Sản lượng phát (Trục trái - Đỏ)
+                # Line 1: Sản lượng phát (Trục trái - Đỏ đô đậm dễ nhìn)
                 fig_odr.add_trace(
                     go.Scatter(
                         x=df_odr_daily["time_label"],
                         y=df_odr_daily["tong_sl_phat"],
                         name="Sản lượng phát",
                         mode="lines+markers+text",
-                        text=df_odr_daily["tong_sl_phat"].apply(lambda x: f"{x:,.0f}"),
-                        textposition="top center", # Nhãn đỏ nằm TRÊN điểm
-                        textfont=dict(size=10, color="#c62828", family="Arial Black"),
-                        line=dict(color="#c62828", width=2.5),
-                        marker=dict(size=6, color="#c62828")
+                        text=df_odr_daily["tong_sl_phat"].apply(
+                            lambda x: f"{x:,.0f}"
+                        ),
+                        textposition="top center",
+                        textfont=dict(
+                            size=10, color="#800000", family="Arial Black"
+                        ),
+                        line=dict(color="#d32f2f", width=2.5),
+                        marker=dict(size=5, color="#d32f2f"),
                     ),
-                    secondary_y=False
+                    secondary_y=False,
                 )
 
-                # Line 2: Tỷ lệ ODR % (Trục phải - Xanh lá)
+                # Line 2: Tỷ lệ ODR % (Trục phải - Xanh lá đậm Forest Green tương phản)
                 fig_odr.add_trace(
                     go.Scatter(
                         x=df_odr_daily["time_label"],
                         y=df_odr_daily["ty_le_odr"],
                         name="Tỷ lệ ODR (%)",
                         mode="lines+markers+text",
-                        text=df_odr_daily["ty_le_odr"].apply(lambda x: f"{x:.1f}%"),
-                        textposition="bottom center", # Nhãn % nằm DƯỚI điểm để tránh đè nhau
-                        textfont=dict(size=10, color="#2e7d32", family="Arial Black"),
+                        text=df_odr_daily["ty_le_odr"].apply(
+                            lambda x: f"{x:.1f}%"
+                        ),
+                        textposition="bottom center",
+                        textfont=dict(
+                            size=10, color="#1b5e20", family="Arial Black"
+                        ),
                         line=dict(color="#2e7d32", width=2, dash="dot"),
-                        marker=dict(size=6, color="#2e7d32")
+                        marker=dict(size=5, color="#2e7d32"),
                     ),
-                    secondary_y=True
+                    secondary_y=True,
                 )
 
-                # Xác định dải giá trị cực đại để khóa cứng Trục Y không bị ÂM
-                max_sl = df_odr_daily["tong_sl_phat"].max() if not df_odr_daily.empty else 100000
-                min_odr = df_odr_daily["ty_le_odr"].min() if not df_odr_daily.empty else 50
+                # Khóa dải giá trị Y để KHÔNG HIỂN THỊ SỐ ÂM
+                max_sl = (
+                    df_odr_daily["tong_sl_phat"].max()
+                    if not df_odr_daily.empty
+                    else 100000
+                )
+                min_odr = (
+                    df_odr_daily["ty_le_odr"].min()
+                    if not df_odr_daily.empty
+                    else 50
+                )
                 start_odr_range = max(50, min_odr - 5) if min_odr >= 50 else 0
 
                 fig_odr.update_layout(
-                    height=410, 
+                    height=410,
                     margin=dict(l=10, r=10, t=35, b=10),
                     legend=dict(
-                        orientation="h", 
-                        yanchor="bottom", 
-                        y=1.05, 
-                        xanchor="right", 
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.05,
+                        xanchor="right",
                         x=1,
-                        font=dict(size=11)
+                        font=dict(size=11),
                     ),
                     xaxis=dict(
-                        type='category', 
+                        type="category",
                         title=None,
                         tickangle=-35,
-                        tickfont=dict(size=10, color="#333333")
+                        tickfont=dict(size=10, color="#333333"),
                     ),
                     hovermode="x unified",
-                    plot_bgcolor="#ffffff"
+                    plot_bgcolor="#ffffff",
                 )
 
-                # Trục Y Trái (Sản lượng): Khóa cứng bắt đầu từ 0
+                # Trục Y Trái (Sản lượng): Bắt đầu từ 0
                 fig_odr.update_yaxes(
-                    title_text="Sản lượng phát", 
-                    secondary_y=False, 
+                    title_text="Sản lượng phát",
+                    secondary_y=False,
                     showgrid=True,
                     gridcolor="#eeeeee",
                     zeroline=True,
                     zerolinecolor="#cccccc",
-                    range=[0, max_sl * 1.25]
-                )
-                
-                # Trục Y Phải (Tỷ lệ ODR %): Giới hạn từ 50% đến 105%
-                fig_odr.update_yaxes(
-                    title_text="Tỷ lệ ODR (%)", 
-                    secondary_y=True, 
-                    showgrid=False, 
-                    zeroline=False,
-                    range=[start_odr_range, 105]
+                    range=[0, max_sl * 1.25],
                 )
 
-                # Hiển thị biểu đồ & Ẩn thanh công cụ Toolbar bị đè
+                # Trục Y Phải (Tỷ lệ ODR %): Khóa dải từ 50% trở lên
+                fig_odr.update_yaxes(
+                    title_text="Tỷ lệ ODR (%)",
+                    secondary_y=True,
+                    showgrid=False,
+                    zeroline=False,
+                    range=[start_odr_range, 105],
+                )
+
                 st.plotly_chart(
-                    fig_odr, 
-                    use_container_width=True, 
-                    config={'displayModeBar': False}
+                    fig_odr,
+                    use_container_width=True,
+                    config={"displayModeBar": False},
                 )
             else:
-                st.warning("Không có dữ liệu phát thành công trong khoảng thời gian đã chọn.")
+                st.warning(
+                    "Không có dữ liệu phát thành công trong khoảng thời gian đã chọn."
+                )
         except Exception as e:
             st.error(f"Lỗi tính toán biểu đồ: {e}")
 
-    # --- 5B. BIỂU ĐỒ PHẢI: TỶ TRỌNG CÁC KHÂU SAI (%) ---
+    # --- BIỂU ĐỒ PHẢI: TỶ TRỌNG CÁC KHÂU SAI (%) ---
     with c_odr_right:
         st.subheader("📊 TỶ TRỌNG CÁC KHÂU SAI (%)")
         try:
-            # Truy vấn đếm số lượng đơn Failed SLA theo cột KHAU_SAI
+            # Truy vấn đếm đơn Failed SLA theo cột KHAU_SAI
             df_khau_sai = con.execute(f"""
                 WITH failed_orders AS (
                     SELECT 
@@ -339,16 +386,22 @@ def render(file_id: str):
                     x="ty_le_pct",
                     y="khau_sai_name",
                     orientation="h",
-                    text=df_khau_sai["ty_le_pct"].apply(lambda x: f"{x:.2f}%")
+                    text=df_khau_sai["ty_le_pct"].apply(lambda x: f"{x:.2f}%"),
                 )
 
                 fig_khau_sai.update_traces(
-                    marker_color="#c62828", # Màu đỏ Viettel Post / Ecommerce
+                    marker_color="#c62828",
                     textposition="outside",
-                    textfont=dict(size=11, color="#111111", family="Arial Black")
+                    textfont=dict(
+                        size=11, color="#111111", family="Arial Black"
+                    ),
                 )
 
-                max_pct = df_khau_sai["ty_le_pct"].max() if not df_khau_sai.empty else 100
+                max_pct = (
+                    df_khau_sai["ty_le_pct"].max()
+                    if not df_khau_sai.empty
+                    else 100
+                )
 
                 fig_khau_sai.update_layout(
                     height=410,
@@ -356,17 +409,26 @@ def render(file_id: str):
                     xaxis_title=None,
                     yaxis_title=None,
                     plot_bgcolor="#ffffff",
-                    xaxis=dict(showgrid=False, showticklabels=False, range=[0, max_pct * 1.25]),
-                    yaxis=dict(showgrid=False, tickfont=dict(size=12, color="#111111"))
+                    xaxis=dict(
+                        showgrid=False,
+                        showticklabels=False,
+                        range=[0, max_pct * 1.25],
+                    ),
+                    yaxis=dict(
+                        showgrid=False,
+                        tickfont=dict(size=12, color="#111111"),
+                    ),
                 )
 
                 st.plotly_chart(
-                    fig_khau_sai, 
+                    fig_khau_sai,
                     use_container_width=True,
-                    config={'displayModeBar': False}
+                    config={"displayModeBar": False},
                 )
             else:
-                st.info("Không có dữ liệu khâu sai cho các đơn Failed SLA trong khoảng thời gian đã chọn.")
+                st.info(
+                    "Không có dữ liệu khâu sai cho các đơn Failed SLA trong khoảng thời gian đã chọn."
+                )
         except Exception as e:
             st.error(f"Lỗi tính toán biểu đồ khâu sai: {e}")
     st.divider()
