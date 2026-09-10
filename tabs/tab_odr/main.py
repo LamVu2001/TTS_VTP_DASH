@@ -655,163 +655,163 @@ def render(file_id: str):
     """
     components.html(matrix_full_html, height=480, scrolling=True)
 
-    # 8. BA BẢNG TỒN KHÂU (FM, MM, LM)
-    ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
+    # # 8. BA BẢNG TỒN KHÂU (FM, MM, LM)
+    # ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
 
-    tinh_tree = {}
-    for tinh, bc, sl in ton_tree_data:
-        if tinh not in tinh_tree: tinh_tree[tinh] = {'sl': 0, 'bcs': {}}
-        tinh_tree[tinh]['sl'] += sl
-        if tinh not in tinh_tree[tinh]['tinhs']: tinh_tree[tinh]['bcs'][bc] = sl
+    # tinh_tree = {}
+    # for tinh, bc, sl in ton_tree_data:
+    #     if tinh not in tinh_tree: tinh_tree[tinh] = {'sl': 0, 'bcs': {}}
+    #     tinh_tree[tinh]['sl'] += sl
+    #     if tinh not in tinh_tree[tinh]['tinhs']: tinh_tree[tinh]['bcs'][bc] = sl
 
-    base_style = """
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background-color: transparent; }
-        .table-container { max-height: 380px; overflow-y: auto; border: 1px solid #d3d3d3; border-radius: 4px; }
-        table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11.5px; background: #fff; }
-        th { position: sticky; top: 0; z-index: 10; background-color: #c62828; color: #ffffff; text-align: center; padding: 7px 4px; border-bottom: 2px solid #b71c1c; border-right: 1px solid #b71c1c; font-weight: bold; }
-        tr.total-row td { position: sticky; top: 31px; z-index: 9; background-color: #f5f5f5; font-weight: bold; border-bottom: 2px solid #ccc; }
-        td { padding: 6px 6px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; text-align: center; }
-        td.col-branch { text-align: left; padding-left: 10px; }
-        .ton-btn { display: inline-block; width: 14px; height: 14px; line-height: 12px; text-align: center; border: 1px solid #555; background: #fff; color: #333; font-weight: bold; font-size: 9px; cursor: pointer; margin-right: 5px; border-radius: 2px; }
-        .ton-highlight-red { color: #c62828; font-weight: bold; }
-        .ton-highlight-orange { color: #e65100; font-weight: bold; }
-    </style>
-    <script>
-        function toggleTonRow(className, event, btnId) {
-            if (event) event.stopPropagation();
-            var rows = document.getElementsByClassName(className);
-            var btn = document.getElementById(btnId);
-            if (!rows || rows.length === 0) return;
-            var isHidden = rows[0].style.display === 'none';
-            for (var i = 0; i < rows.length; i++) {
-                rows[i].style.display = isHidden ? 'table-row' : 'none';
-            }
-            if (btn) btn.innerText = isHidden ? '[-]' : '[+]';
-        }
-    </script>
-    """
+    # base_style = """
+    # <style>
+    #     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background-color: transparent; }
+    #     .table-container { max-height: 380px; overflow-y: auto; border: 1px solid #d3d3d3; border-radius: 4px; }
+    #     table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11.5px; background: #fff; }
+    #     th { position: sticky; top: 0; z-index: 10; background-color: #c62828; color: #ffffff; text-align: center; padding: 7px 4px; border-bottom: 2px solid #b71c1c; border-right: 1px solid #b71c1c; font-weight: bold; }
+    #     tr.total-row td { position: sticky; top: 31px; z-index: 9; background-color: #f5f5f5; font-weight: bold; border-bottom: 2px solid #ccc; }
+    #     td { padding: 6px 6px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; text-align: center; }
+    #     td.col-branch { text-align: left; padding-left: 10px; }
+    #     .ton-btn { display: inline-block; width: 14px; height: 14px; line-height: 12px; text-align: center; border: 1px solid #555; background: #fff; color: #333; font-weight: bold; font-size: 9px; cursor: pointer; margin-right: 5px; border-radius: 2px; }
+    #     .ton-highlight-red { color: #c62828; font-weight: bold; }
+    #     .ton-highlight-orange { color: #e65100; font-weight: bold; }
+    # </style>
+    # <script>
+    #     function toggleTonRow(className, event, btnId) {
+    #         if (event) event.stopPropagation();
+    #         var rows = document.getElementsByClassName(className);
+    #         var btn = document.getElementById(btnId);
+    #         if (!rows || rows.length === 0) return;
+    #         var isHidden = rows[0].style.display === 'none';
+    #         for (var i = 0; i < rows.length; i++) {
+    #             rows[i].style.display = isHidden ? 'table-row' : 'none';
+    #         }
+    #         if (btn) btn.innerText = isHidden ? '[-]' : '[+]';
+    #     }
+    # </script>
+    # """
 
-    # BẢNG 1: FM
-    st.markdown('<p style="font-size: 13px; font-weight: bold; color: #111; border-left: 4px solid #c62828; padding-left: 8px; margin-top: 10px; margin-bottom: 6px;">TỒN KHÂU FM CÁC BƯU GỬI CHƯA XUẤT SẠCH – CÓ THỂ XUẤT CHI TIẾT THEO ĐƠN</p>', unsafe_allow_html=True)
+    # # BẢNG 1: FM
+    # st.markdown('<p style="font-size: 13px; font-weight: bold; color: #111; border-left: 4px solid #c62828; padding-left: 8px; margin-top: 10px; margin-bottom: 6px;">TỒN KHÂU FM CÁC BƯU GỬI CHƯA XUẤT SẠCH – CÓ THỂ XUẤT CHI TIẾT THEO ĐƠN</p>', unsafe_allow_html=True)
     
-    fm_rows_html = ""
-    for idx_t, (t_name, t_data) in enumerate(tinh_tree.items()):
-        t_sl = t_data['sl']
-        t_id = f"fm_tinh_{idx_t}"
-        fm_rows_html += f"""
-        <tr style="cursor:pointer;" onclick="toggleTonRow('{t_id}', event, 'btn_{t_id}')">
-            <td class="col-branch"><span class="ton-btn" id="btn_{t_id}">[+]</span> <b>{t_name}</b></td>
-            <td>{t_sl:,.0f}</td><td>{int(t_sl*0.03):,.0f}</td><td>3.0%</td>
-            <td class="ton-highlight-red">{int(t_sl*0.005):,.0f}</td>
-            <td class="ton-highlight-orange">{int(t_sl*0.002):,.0f}</td>
-            <td class="ton-highlight-red">1.50%</td><td class="ton-highlight-orange">0.65%</td>
-        </tr>
-        """
-        for b_name, b_sl in t_data['bcs'].items():
-            fm_rows_html += f"""
-            <tr class="{t_id}" style="display:none; background-color:#fafafa;">
-                <td class="col-branch" style="padding-left: 32px; color: #555;">• Bưu cục: {b_name}</td>
-                <td>{b_sl:,.0f}</td><td>{int(b_sl*0.03):,.0f}</td><td>3.0%</td>
-                <td class="ton-highlight-red">{int(b_sl*0.005):,.0f}</td>
-                <td class="ton-highlight-orange">{int(b_sl*0.002):,.0f}</td>
-                <td class="ton-highlight-red">1.50%</td><td class="ton-highlight-orange">0.65%</td>
-            </tr>
-            """
+    # fm_rows_html = ""
+    # for idx_t, (t_name, t_data) in enumerate(tinh_tree.items()):
+    #     t_sl = t_data['sl']
+    #     t_id = f"fm_tinh_{idx_t}"
+    #     fm_rows_html += f"""
+    #     <tr style="cursor:pointer;" onclick="toggleTonRow('{t_id}', event, 'btn_{t_id}')">
+    #         <td class="col-branch"><span class="ton-btn" id="btn_{t_id}">[+]</span> <b>{t_name}</b></td>
+    #         <td>{t_sl:,.0f}</td><td>{int(t_sl*0.03):,.0f}</td><td>3.0%</td>
+    #         <td class="ton-highlight-red">{int(t_sl*0.005):,.0f}</td>
+    #         <td class="ton-highlight-orange">{int(t_sl*0.002):,.0f}</td>
+    #         <td class="ton-highlight-red">1.50%</td><td class="ton-highlight-orange">0.65%</td>
+    #     </tr>
+    #     """
+    #     for b_name, b_sl in t_data['bcs'].items():
+    #         fm_rows_html += f"""
+    #         <tr class="{t_id}" style="display:none; background-color:#fafafa;">
+    #             <td class="col-branch" style="padding-left: 32px; color: #555;">• Bưu cục: {b_name}</td>
+    #             <td>{b_sl:,.0f}</td><td>{int(b_sl*0.03):,.0f}</td><td>3.0%</td>
+    #             <td class="ton-highlight-red">{int(b_sl*0.005):,.0f}</td>
+    #             <td class="ton-highlight-orange">{int(b_sl*0.002):,.0f}</td>
+    #             <td class="ton-highlight-red">1.50%</td><td class="ton-highlight-orange">0.65%</td>
+    #         </tr>
+    #         """
 
-    html_fm = f"""
-    <!DOCTYPE html><html><head>{base_style}</head><body>
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 20%;">Chi Nhánh</th><th style="width: 14%;">Sản lượng đã thu thành công</th><th style="width: 10%;">Tổng tồn</th><th style="width: 10%;">Tỷ lệ tồn</th><th style="width: 11%;">Tồn quá 1 ngày</th><th style="width: 11%;">Tồn quá 2 ngày</th><th style="width: 12%;">Tỷ lệ tồn quá 1 ngày</th><th style="width: 12%;">Tỷ lệ tồn quá 2 ngày</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class="total-row">
-                    <td class="col-branch">TOTAL</td><td>{tong_sl_phat:,.0f}</td><td>{int(tong_sl_phat*0.03):,.0f}</td><td>3.0%</td>
-                    <td class="ton-highlight-red">{int(tong_sl_phat*0.005):,.0f}</td><td class="ton-highlight-orange">{int(tong_sl_phat*0.002):,.0f}</td><td class="ton-highlight-red">1.50%</td><td class="ton-highlight-orange">0.65%</td>
-                </tr>
-                {fm_rows_html}
-            </tbody>
-        </table>
-    </div>
-    </body></html>
-    """
-    components.html(html_fm, height=390, scrolling=False)
+    # html_fm = f"""
+    # <!DOCTYPE html><html><head>{base_style}</head><body>
+    # <div class="table-container">
+    #     <table>
+    #         <thead>
+    #             <tr>
+    #                 <th style="width: 20%;">Chi Nhánh</th><th style="width: 14%;">Sản lượng đã thu thành công</th><th style="width: 10%;">Tổng tồn</th><th style="width: 10%;">Tỷ lệ tồn</th><th style="width: 11%;">Tồn quá 1 ngày</th><th style="width: 11%;">Tồn quá 2 ngày</th><th style="width: 12%;">Tỷ lệ tồn quá 1 ngày</th><th style="width: 12%;">Tỷ lệ tồn quá 2 ngày</th>
+    #             </tr>
+    #         </thead>
+    #         <tbody>
+    #             <tr class="total-row">
+    #                 <td class="col-branch">TOTAL</td><td>{tong_sl_phat:,.0f}</td><td>{int(tong_sl_phat*0.03):,.0f}</td><td>3.0%</td>
+    #                 <td class="ton-highlight-red">{int(tong_sl_phat*0.005):,.0f}</td><td class="ton-highlight-orange">{int(tong_sl_phat*0.002):,.0f}</td><td class="ton-highlight-red">1.50%</td><td class="ton-highlight-orange">0.65%</td>
+    #             </tr>
+    #             {fm_rows_html}
+    #         </tbody>
+    #     </table>
+    # </div>
+    # </body></html>
+    # """
+    # components.html(html_fm, height=390, scrolling=False)
 
-    # BẢNG 2: MM
-    st.markdown('<p style="font-size: 13px; font-weight: bold; color: #111; border-left: 4px solid #c62828; padding-left: 8px; margin-top: 10px; margin-bottom: 6px;">TỒN KHÂU MM CÁC BƯU GỬI CHƯA KẾT NỐI – CÓ THỂ XUẤT CHI TIẾT THEO ĐƠN</p>', unsafe_allow_html=True)
-    html_mm = f"""
-    <!DOCTYPE html><html><head>{base_style}</head><body>
-    <div class="table-container" style="max-height: 220px;">
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 20%;">Đơn vị kết nối</th><th style="width: 14%;">Sản lượng đã nhận bàn giao</th><th style="width: 10%;">Tổng tồn</th><th style="width: 10%;">Tỷ lệ tồn</th><th style="width: 11%;">Quá 6H</th><th style="width: 11%;">Quá 12H</th><th style="width: 12%;">Quá 24H</th><th style="width: 12%;">Quá 48H</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class="total-row">
-                    <td class="col-branch">TOTAL</td><td class="ton-highlight-red">222</td><td>1,381</td><td>1.12%</td><td class="ton-highlight-red">111</td><td class="ton-highlight-orange">111</td><td>13</td><td>23</td>
-                </tr>
-                <tr><td class="col-branch">TTKT3</td><td class="ton-highlight-red">5</td><td>381</td><td>4.2%</td><td class="ton-highlight-red">2</td><td class="ton-highlight-orange">3</td><td>1</td><td>2</td></tr>
-                <tr><td class="col-branch">HNIVC</td><td class="ton-highlight-red">5</td><td>381</td><td>4.2%</td><td class="ton-highlight-red">2</td><td class="ton-highlight-orange">3</td><td>1</td><td>2</td></tr>
-                <tr><td class="col-branch">DVVC</td><td class="ton-highlight-red">5</td><td>381</td><td>4.2%</td><td class="ton-highlight-red">2</td><td class="ton-highlight-orange">3</td><td>1</td><td>2</td></tr>
-                <tr><td class="col-branch">DVVTNN3</td><td class="ton-highlight-red">5</td><td>381</td><td>4.2%</td><td class="ton-highlight-red">2</td><td class="ton-highlight-orange">3</td><td>1</td><td>2</td></tr>
-            </tbody>
-        </table>
-    </div>
-    </body></html>
-    """
-    components.html(html_mm, height=230, scrolling=False)
+    # # BẢNG 2: MM
+    # st.markdown('<p style="font-size: 13px; font-weight: bold; color: #111; border-left: 4px solid #c62828; padding-left: 8px; margin-top: 10px; margin-bottom: 6px;">TỒN KHÂU MM CÁC BƯU GỬI CHƯA KẾT NỐI – CÓ THỂ XUẤT CHI TIẾT THEO ĐƠN</p>', unsafe_allow_html=True)
+    # html_mm = f"""
+    # <!DOCTYPE html><html><head>{base_style}</head><body>
+    # <div class="table-container" style="max-height: 220px;">
+    #     <table>
+    #         <thead>
+    #             <tr>
+    #                 <th style="width: 20%;">Đơn vị kết nối</th><th style="width: 14%;">Sản lượng đã nhận bàn giao</th><th style="width: 10%;">Tổng tồn</th><th style="width: 10%;">Tỷ lệ tồn</th><th style="width: 11%;">Quá 6H</th><th style="width: 11%;">Quá 12H</th><th style="width: 12%;">Quá 24H</th><th style="width: 12%;">Quá 48H</th>
+    #             </tr>
+    #         </thead>
+    #         <tbody>
+    #             <tr class="total-row">
+    #                 <td class="col-branch">TOTAL</td><td class="ton-highlight-red">222</td><td>1,381</td><td>1.12%</td><td class="ton-highlight-red">111</td><td class="ton-highlight-orange">111</td><td>13</td><td>23</td>
+    #             </tr>
+    #             <tr><td class="col-branch">TTKT3</td><td class="ton-highlight-red">5</td><td>381</td><td>4.2%</td><td class="ton-highlight-red">2</td><td class="ton-highlight-orange">3</td><td>1</td><td>2</td></tr>
+    #             <tr><td class="col-branch">HNIVC</td><td class="ton-highlight-red">5</td><td>381</td><td>4.2%</td><td class="ton-highlight-red">2</td><td class="ton-highlight-orange">3</td><td>1</td><td>2</td></tr>
+    #             <tr><td class="col-branch">DVVC</td><td class="ton-highlight-red">5</td><td>381</td><td>4.2%</td><td class="ton-highlight-red">2</td><td class="ton-highlight-orange">3</td><td>1</td><td>2</td></tr>
+    #             <tr><td class="col-branch">DVVTNN3</td><td class="ton-highlight-red">5</td><td>381</td><td>4.2%</td><td class="ton-highlight-red">2</td><td class="ton-highlight-orange">3</td><td>1</td><td>2</td></tr>
+    #         </tbody>
+    #     </table>
+    # </div>
+    # </body></html>
+    # """
+    # components.html(html_mm, height=230, scrolling=False)
 
-    # BẢNG 3: LM
-    st.markdown('<p style="font-size: 13px; font-weight: bold; color: #111; border-left: 4px solid #c62828; padding-left: 8px; margin-top: 10px; margin-bottom: 6px;">TỒN KHÂU LM CÁC BƯU GỬI CHƯA PHÁT – CÓ THỂ XUẤT CHI TIẾT THEO ĐƠN</p>', unsafe_allow_html=True)
+    # # BẢNG 3: LM
+    # st.markdown('<p style="font-size: 13px; font-weight: bold; color: #111; border-left: 4px solid #c62828; padding-left: 8px; margin-top: 10px; margin-bottom: 6px;">TỒN KHÂU LM CÁC BƯU GỬI CHƯA PHÁT – CÓ THỂ XUẤT CHI TIẾT THEO ĐƠN</p>', unsafe_allow_html=True)
     
-    lm_rows_html = ""
-    for idx_t, (t_name, t_data) in enumerate(tinh_tree.items()):
-        t_sl = t_data['sl']
-        t_id = f"lm_tinh_{idx_t}"
-        lm_rows_html += f"""
-        <tr style="cursor:pointer;" onclick="toggleTonRow('{t_id}', event, 'btn_{t_id}')">
-            <td class="col-branch"><span class="ton-btn" id="btn_{t_id}">[+]</span> <b>{t_name}</b></td>
-            <td>{t_sl:,.0f}</td><td>{int(t_sl*0.04):,.0f}</td><td>4.0%</td>
-            <td class="ton-highlight-red">{int(t_sl*0.008):,.0f}</td>
-            <td class="ton-highlight-orange">{int(t_sl*0.003):,.0f}</td>
-            <td class="ton-highlight-orange">0.80%</td><td class="ton-highlight-orange">0.30%</td>
-        </tr>
-        """
-        for b_name, b_sl in t_data['bcs'].items():
-            lm_rows_html += f"""
-            <tr class="{t_id}" style="display:none; background-color:#fafafa;">
-                <td class="col-branch" style="padding-left: 32px; color: #555;">• Bưu cục: {b_name}</td>
-                <td>{b_sl:,.0f}</td><td>{int(b_sl*0.04):,.0f}</td><td>4.0%</td>
-                <td class="ton-highlight-red">{int(b_sl*0.008):,.0f}</td>
-                <td class="ton-highlight-orange">{int(b_sl*0.003):,.0f}</td>
-                <td class="ton-highlight-orange">0.80%</td><td class="ton-highlight-orange">0.30%</td>
-            </tr>
-            """
+    # lm_rows_html = ""
+    # for idx_t, (t_name, t_data) in enumerate(tinh_tree.items()):
+    #     t_sl = t_data['sl']
+    #     t_id = f"lm_tinh_{idx_t}"
+    #     lm_rows_html += f"""
+    #     <tr style="cursor:pointer;" onclick="toggleTonRow('{t_id}', event, 'btn_{t_id}')">
+    #         <td class="col-branch"><span class="ton-btn" id="btn_{t_id}">[+]</span> <b>{t_name}</b></td>
+    #         <td>{t_sl:,.0f}</td><td>{int(t_sl*0.04):,.0f}</td><td>4.0%</td>
+    #         <td class="ton-highlight-red">{int(t_sl*0.008):,.0f}</td>
+    #         <td class="ton-highlight-orange">{int(t_sl*0.003):,.0f}</td>
+    #         <td class="ton-highlight-orange">0.80%</td><td class="ton-highlight-orange">0.30%</td>
+    #     </tr>
+    #     """
+    #     for b_name, b_sl in t_data['bcs'].items():
+    #         lm_rows_html += f"""
+    #         <tr class="{t_id}" style="display:none; background-color:#fafafa;">
+    #             <td class="col-branch" style="padding-left: 32px; color: #555;">• Bưu cục: {b_name}</td>
+    #             <td>{b_sl:,.0f}</td><td>{int(b_sl*0.04):,.0f}</td><td>4.0%</td>
+    #             <td class="ton-highlight-red">{int(b_sl*0.008):,.0f}</td>
+    #             <td class="ton-highlight-orange">{int(b_sl*0.003):,.0f}</td>
+    #             <td class="ton-highlight-orange">0.80%</td><td class="ton-highlight-orange">0.30%</td>
+    #         </tr>
+    #         """
 
-    html_lm = f"""
-    <!DOCTYPE html><html><head>{base_style}</head><body>
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 20%;">Chi nhánh</th><th style="width: 14%;">Sản lượng đã phát thành công</th><th style="width: 10%;">Tổng tồn</th><th style="width: 10%;">Tỷ lệ tồn</th><th style="width: 11%;">Tồn quá 1 ngày</th><th style="width: 11%;">Tồn quá 2 ngày</th><th style="width: 12%;">Tồn quá 3 ngày</th><th style="width: 12%;">Tồn quá 4 ngày</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class="total-row">
-                    <td class="col-branch">TOTAL</td><td>{tong_sl_phat:,.0f}</td><td>{int(tong_sl_phat*0.04):,.0f}</td><td>4.0%</td>
-                    <td class="ton-highlight-red">{int(tong_sl_phat*0.008):,.0f}</td><td class="ton-highlight-orange">{int(tong_sl_phat*0.003):,.0f}</td><td class="ton-highlight-orange">0.80%</td><td class="ton-highlight-orange">0.30%</td>
-                </tr>
-                {lm_rows_html}
-            </tbody>
-        </table>
-    </div>
-    </body></html>
-    """
-    components.html(html_lm, height=390, scrolling=False)
+    # html_lm = f"""
+    # <!DOCTYPE html><html><head>{base_style}</head><body>
+    # <div class="table-container">
+    #     <table>
+    #         <thead>
+    #             <tr>
+    #                 <th style="width: 20%;">Chi nhánh</th><th style="width: 14%;">Sản lượng đã phát thành công</th><th style="width: 10%;">Tổng tồn</th><th style="width: 10%;">Tỷ lệ tồn</th><th style="width: 11%;">Tồn quá 1 ngày</th><th style="width: 11%;">Tồn quá 2 ngày</th><th style="width: 12%;">Tồn quá 3 ngày</th><th style="width: 12%;">Tồn quá 4 ngày</th>
+    #             </tr>
+    #         </thead>
+    #         <tbody>
+    #             <tr class="total-row">
+    #                 <td class="col-branch">TOTAL</td><td>{tong_sl_phat:,.0f}</td><td>{int(tong_sl_phat*0.04):,.0f}</td><td>4.0%</td>
+    #                 <td class="ton-highlight-red">{int(tong_sl_phat*0.008):,.0f}</td><td class="ton-highlight-orange">{int(tong_sl_phat*0.003):,.0f}</td><td class="ton-highlight-orange">0.80%</td><td class="ton-highlight-orange">0.30%</td>
+    #             </tr>
+    #             {lm_rows_html}
+    #         </tbody>
+    #     </table>
+    # </div>
+    # </body></html>
+    # """
+    # components.html(html_lm, height=390, scrolling=False)
