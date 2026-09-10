@@ -14,7 +14,7 @@ def render(file_id: str):
     # 1. KẾT NỐI DATA THEO FILE_ID
     con = get_opr_connection(file_id)
 
-    # 2. KHỞI TẠO SESSION STATE CHO CÁC BỘ LỌC TINH GỌN
+    # 2. KHỞI TẠO SESSION STATE BỘ LỌC (ĐỒNG BỘ KEY TRỌNG LƯỢNG f_tl VỚI CÁC TAB KHÁC)
     if "opr_date" not in st.session_state or not st.session_state.opr_date:
         today = date.today()
         first_day_of_month = today.replace(day=1)
@@ -23,7 +23,7 @@ def render(file_id: str):
     if "opr_kh" not in st.session_state: st.session_state.opr_kh = []
     if "opr_dt" not in st.session_state: st.session_state.opr_dt = []
     if "opr_dv" not in st.session_state: st.session_state.opr_dv = []
-    if "opr_tl" not in st.session_state: st.session_state.opr_tl = []
+    if "f_tl" not in st.session_state: st.session_state.f_tl = []  # Đồng bộ key f_tl
 
     # 3. HÀM XỬ LÝ SQL IN CLAUSE AN TOÀN
     def sql_in_clause(column_name, selected_list):
@@ -56,11 +56,11 @@ def render(file_id: str):
             c = sql_in_clause("ma_dv_viettel", st.session_state.opr_dv)
             if c: conds.append(c)
             
-        # Lọc Trọng lượng
+        # Lọc Trọng lượng (Sử dụng st.session_state.f_tl đồng bộ)
         if exclude != "tl":
-            if st.session_state.opr_tl:
+            if st.session_state.f_tl:
                 tl_conds = []
-                for val in st.session_state.opr_tl:
+                for val in st.session_state.f_tl:
                     if val == "< 500g":
                         tl_conds.append("trong_luong < 500")
                     elif val == "500g - 2kg":
@@ -78,14 +78,14 @@ def render(file_id: str):
     dv_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {build_where('dv')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
     tl_opts = ["< 500g", "500g - 2kg", "> 2kg"]
 
-    # Validate dọn dẹp các giá trị đã chọn nếu không còn nằm trong bộ tùy chọn mới
+    # Validate dọn dẹp các giá trị đã chọn
     st.session_state.opr_kh = [v for v in st.session_state.opr_kh if v in kh_opts]
     st.session_state.opr_dt = [v for v in st.session_state.opr_dt if v in dt_opts]
     st.session_state.opr_dv = [v for v in st.session_state.opr_dv if v in dv_opts]
-    st.session_state.opr_tl = [v for v in st.session_state.opr_tl if v in tl_opts]
+    st.session_state.f_tl = [v for v in st.session_state.f_tl if v in tl_opts]
 
-    # 6. GIAO DIỆN BỘ LỌC DÀN NGANG (CHỈ CÒN 5 BỘ LỌC CHÍNH)
-    f_opr1, f_opr2, f_opr3, f_opr4, f_opr5 = st.columns(5)
+    # 6. GIAO DIỆN BỘ LỌC DÀN NGANG (ĐỒNG BỘ f_opr7 VÀ KEY f_tl)
+    f_opr1, f_opr2, f_opr3, f_opr4, f_opr7 = st.columns(5)
 
     with f_opr1:
         st.date_input("NGÀY NHẬP MÁY", key="opr_date")
@@ -95,8 +95,8 @@ def render(file_id: str):
         st.multiselect("MÃ ĐỐI TÁC", dt_opts, key="opr_dt", placeholder="Tất cả")
     with f_opr4:
         st.multiselect("MÃ DỊCH VỤ", dv_opts, key="opr_dv", placeholder="Tất cả")
-    with f_opr5:
-        st.multiselect("TRỌNG LƯỢNG", tl_opts, key="opr_tl", placeholder="Tất cả")
+    with f_opr7:
+        st.multiselect("TRỌNG LƯỢNG", tl_opts, key="f_tl", placeholder="Tất cả")
 
     # 7. TÍNH TOÁN DỮ LIỆU BÁO CÁO
     where_sql_opr = build_where()
