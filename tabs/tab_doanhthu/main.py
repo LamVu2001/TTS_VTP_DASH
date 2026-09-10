@@ -120,45 +120,129 @@ def render(file_id=None):
             value=f"{tong_sl:,.0f}"
         )
     
-    c_chart, c_top = st.columns([2, 1.3])
-    
-    with c_chart:
-        st.subheader("XU HƯỚNG DOANH THU 7 NGÀY GẦN NHẤT (TỶ ĐỒNG)")
+   # chia 2 cột: Trái (Biểu đồ - 2 phần), Phải (Bảng - 1.3 phần)
+    c_dt_chart, c_dt_right = st.columns([2, 1.3])
+
+    # ---------------------------------------------------------
+    # CỘT TRÁI: BIỂU ĐỒ XU HƯỚNG DOANH THU
+    # ---------------------------------------------------------
+    with c_dt_chart:
+        st.subheader("📈 XU HƯỚNG DOANH THU (TỶ ĐỒNG)")
+
+        time_view_dt = st.radio(
+            "Chế độ xem:",
+            options=["Ngày", "Tuần", "Tháng"],
+            index=0,
+            horizontal=True,
+            key="dt_chart_time_view",
+            label_visibility="collapsed",
+        )
+
         try:
-            df_daily = con.execute(f"""
-                SELECT clean_date as ngay, SUM(tong_cuoc)/1e9 as DoanhThu 
-                FROM orders WHERE {where_sql_dt} AND clean_date IS NOT NULL 
-                GROUP BY ngay ORDER BY ngay DESC LIMIT 7
-            """).fetchdf()
-            if len(df_daily) > 0:
-                df_daily = df_daily.sort_values("ngay")
-                fig = px.line(df_daily, x="ngay", y="DoanhThu", markers=True)
-                fig.update_traces(line=dict(color="#c62828", width=2.5), marker=dict(size=6, color="#c62828"))
-                fig.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10), yaxis_title=None, xaxis_title=None)
-                st.plotly_chart(fig, use_container_width=True)
+            if time_view_dt == "Tuần":
+                date_expr_dt = "CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)"
+                date_format_dt = "%d/%m/%Y"
+            elif time_view_dt == "Tháng":
+                date_expr_dt = "DATE_TRUNC('month', CAST(tg_ptc AS DATE))"
+                date_format_dt = "%m/%Y"
             else:
-                st.info("Chưa có dữ liệu theo ngày.")
-        except Exception:
-            st.info("Không thể tải biểu đồ xu hướng.")
+                date_expr_dt = "CAST(tg_ptc AS DATE)"
+                date_format_dt = "%d/%m/%Y"
 
-    with c_top:
-        st.subheader("TOP 10 KHÁCH HÀNG GIẢM DOANH THU")
-        try:
-            df_top = con.execute(f"""
-                SELECT ma_khgui AS "MÃ KH", ROUND(SUM(tong_cuoc)/1e6, 1) AS "DOANH THU (TR)" 
-                FROM orders WHERE {where_sql_dt} AND ma_khgui IS NOT NULL 
-                GROUP BY ma_khgui ORDER BY "DOANH THU (TR)" DESC LIMIT 10
+            df_dt_trend = con.execute(f"""
+                SELECT 
+                    STRFTIME({date_expr_dt}, '{date_format_dt}') as time_label, 
+                    COALESCE(SUM(tong_cuoc), 0) / 1e9 as doanh_thu_ty,
+                    MIN({date_expr_dt}) as sort_key
+                FROM orders 
+                WHERE {where_sql_dt} AND tg_ptc IS NOT NULL
+                GROUP BY 1
+                ORDER BY sort_key ASC
             """).fetchdf()
-            st.dataframe(df_top, use_container_width=True, hide_index=True, height=380)
-        except Exception:
-            st.info("Không có dữ liệu hiển thị.")
 
+            if len(df_dt_trend) > 0:
+                fig_dt = go.Figure()
+                fig_dt.add_trace(
+                    go.Scatter(
+                        x=df_dt_trend["time_label"],
+                        y=df_dt_trend["doanh_thu_ty"],
+                        name="Doanh thu (Tỷ)",
+                        mode="lines+markers+text",
+                        text=df_dt_trend["doanh_thu_ty"].apply(lambda x: f"{x:,.2f}"),
+                        textposition="top center",
+                        textfont=dict(size=10, color="#800000", family="Arial Black"),
+                        line=dict(color="#c62828", width=2.5),
+                        marker=dict(size=6, color="#c62828"),
+                    )
+                )
+
+                max_val = df_dt_trend["doanh_thu_ty"].max() if not df_dt_trend.empty else 1.0
+
+                fig_dt.update_layout(
+                    height=410,
+                    margin=dict(l=10, r=10, t=35, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, font=dict(size=11)),
+                    xaxis=dict(type="category", title=None, tickangle=-35, tickfont=dict(size=10, color="#333333")),
+                    yaxis=dict(title="Tỷ đồng", showgrid=True, gridcolor="#eeeeee", zeroline=True, zerolinecolor="#cccccc", range=[0, max_val * 1.25]),
+                    hovermode="x unified",
+                    plot_bgcolor="#ffffff",
+                )
+
+                st.plotly_chart(fig_dt, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.warning("Không có dữ liệu doanh thu trong khoảng thời gian đã chọn.")
+        except Exception as e:
+            st.error(f"Lỗi tính toán biểu đồ doanh thu: {e}")
+
+    # ---------------------------------------------------------
+    # CỘT PHẢI: BẢNG TOP 10 KHÁCH HÀNG (FULL SỐ DOANH THU)
+    # ---------------------------------------------------------
+    with c_dt_right:
+        st.subheader("📊 TOP 10 KHÁCH HÀNG DOANH THU")
+
+        try:
+            # Lấy đầy đủ số tiền thực tế (SUM tong_cuoc không chia cho 1e6 hay 1e9)
+            df_top_kh = con.execute(f"""
+                SELECT 
+                    CAST(ma_khgui AS VARCHAR) AS "MÃ KH",
+                    COALESCE(SUM(tong_cuoc), 0) AS "DOANH THU (VNĐ)"
+                FROM orders
+                WHERE {where_sql_dt} AND ma_khgui IS NOT NULL
+                GROUP BY 1
+                ORDER BY "DOANH THU (VNĐ)" DESC
+                LIMIT 10
+            """).fetchdf()
+
+            if len(df_top_kh) > 0:
+                # Định dạng hiển thị bảng chuẩn đẹp, đẩy ra đầy đủ con số kèm dấu phân cách
+                st.dataframe(
+                    df_top_kh,
+                    use_container_width=True,
+                    height=410,
+                    hide_index=True,
+                    column_config={
+                        "MÃ KH": st.column_config.TextColumn(
+                            "MÃ KHÁCH HÀNG",
+                            width="medium",
+                        ),
+                        "DOANH THU (VNĐ)": st.column_config.NumberColumn(
+                            "DOANH THU (VNĐ)",
+                            format="%,.0f VNĐ",  # Đẩy full số tiền nguyên bản, có dấu phẩy
+                            width="large",
+                        ),
+                    }
+                )
+            else:
+                st.info("Không có dữ liệu khách hàng trong khoảng thời gian đã chọn.")
+        except Exception as e:
+            st.error(f"Lỗi truy vấn Top khách hàng: {e}")
     st.divider()
-    st.subheader("📊 BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG")
+
 
     # ---------------------------------------------------------
     # 4. XỬ LÝ DỮ LIỆU BẢNG MA TRẬN
     # ---------------------------------------------------------
+    st.subheader("📊 BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG")
     try:
         days_data_dt = con.execute(f"""
             SELECT clean_date, SUM(tong_cuoc)/1e9 as dt, COUNT(ma_phieugui) as sl 
