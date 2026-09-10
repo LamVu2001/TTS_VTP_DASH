@@ -1,7 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import plotly.express as px
-from tabs.tab_odr.data_loader import get_connection
+from ..tab_odr.data_loader import get_connection
 
 def render(file_id=None):
     # Lấy kết nối DuckDB dùng chung từ tab_odr
