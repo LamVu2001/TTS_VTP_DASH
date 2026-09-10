@@ -240,14 +240,14 @@ def render(file_id=None):
 
 
     # ---------------------------------------------------------
-    # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (FIX CỘT MA_BUUCUC_PHAT)
+    # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (STYLE GỌN CHUẨN ODR)
     # ---------------------------------------------------------
-    st.subheader("📊 BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG")
+    st.subheader("BAO CAO MA TRAN DOANH THU & SAN LUONG")
 
     try:
         base_where = f"WHERE {where_sql_dt}" if where_sql_dt else ""
 
-        # 1. LẤY MỐC THỜI GIAN (Dùng cột tg_ptc)
+        # 1. LẤY MỐC THỜI GIAN
         days_df = con.execute(f"""
             SELECT 
                 STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as dt, 
@@ -280,7 +280,7 @@ def render(file_id=None):
         while len(month_cols) < 2:
             month_cols.insert(0, f"M_empty_{len(month_cols)}")
 
-        # 2. AGGREGATE BẢNG TỔNG (SẢN LƯỢNG & DOANH THU)
+        # 2. AGGREGATE BẢNG TỔNG
         df_d = con.execute(f"""
             SELECT 
                 STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key,
@@ -341,139 +341,152 @@ def render(file_id=None):
         wow_dt = ((v_w_dt[-1] - v_w_dt[-2])/v_w_dt[-2]*100) if len(v_w_dt)>1 and v_w_dt[-2]>0 else 0
         mom_dt = ((v_m_dt[1] - v_m_dt[0])/v_m_dt[0]*100) if len(v_m_dt)>1 and v_m_dt[0]>0 else 0
 
-        # 3. TRUY VẤN CÂY DỮ LIỆU CẤP 1 (MÃ KH) & CẤP 2 (TỈNH -> BƯU CỤC)
+        # 3. TRUY VẤN CHI TIẾT CẢ SẢN LƯỢNG VÀ DOANH THU
         kh_day_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
+            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2
         """).fetchdf()
         kh_week_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
+            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2
         """).fetchdf()
         kh_month_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2
+            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2
         """).fetchdf()
 
-        # Đã đổi buu_cuc_phat thành ma_buucuc_phat
         tree_day_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
+            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3
         """).fetchdf()
         tree_week_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
+            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3
         """).fetchdf()
         tree_month_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chưa xác định') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl FROM orders {base_where} GROUP BY 1, 2, 3
+            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3
         """).fetchdf()
 
-        # Maps dữ liệu
-        map_kh_d, map_kh_w, map_kh_m = {}, {}, {}
-        for r in kh_day_df.itertuples(): map_kh_d[(str(r.kh), str(r.d_key))] = r.sl
-        for r in kh_week_df.itertuples(): map_kh_w[(str(r.kh), str(r.w_key))] = r.sl
-        for r in kh_month_df.itertuples(): map_kh_m[(str(r.kh), str(r.m_key))] = r.sl
+        # Build Maps
+        map_kh_d_sl, map_kh_w_sl, map_kh_m_sl = {}, {}, {}
+        map_kh_d_dt, map_kh_w_dt, map_kh_m_dt = {}, {}, {}
+        for r in kh_day_df.itertuples(): 
+            map_kh_d_sl[(str(r.kh), str(r.d_key))] = r.sl
+            map_kh_d_dt[(str(r.kh), str(r.d_key))] = r.dt
+        for r in kh_week_df.itertuples(): 
+            map_kh_w_sl[(str(r.kh), str(r.w_key))] = r.sl
+            map_kh_w_dt[(str(r.kh), str(r.w_key))] = r.dt
+        for r in kh_month_df.itertuples(): 
+            map_kh_m_sl[(str(r.kh), str(r.m_key))] = r.sl
+            map_kh_m_dt[(str(r.kh), str(r.m_key))] = r.dt
 
-        map_tinh_d, map_bc_d = {}, {}
+        map_tinh_d_sl, map_bc_d_sl, map_tinh_d_dt, map_bc_d_dt = {}, {}, {}, {}
         for r in tree_day_df.itertuples():
-            map_tinh_d[(str(r.tinh), str(r.d_key))] = map_tinh_d.get((str(r.tinh), str(r.d_key)), 0) + r.sl
-            map_bc_d[(str(r.tinh), str(r.bc), str(r.d_key))] = r.sl
+            map_tinh_d_sl[(str(r.tinh), str(r.d_key))] = map_tinh_d_sl.get((str(r.tinh), str(r.d_key)), 0) + r.sl
+            map_bc_d_sl[(str(r.tinh), str(r.bc), str(r.d_key))] = r.sl
+            map_tinh_d_dt[(str(r.tinh), str(r.d_key))] = map_tinh_d_dt.get((str(r.tinh), str(r.d_key)), 0) + r.dt
+            map_bc_d_dt[(str(r.tinh), str(r.bc), str(r.d_key))] = r.dt
 
-        map_tinh_w, map_bc_w = {}, {}
+        map_tinh_w_sl, map_bc_w_sl, map_tinh_w_dt, map_bc_w_dt = {}, {}, {}, {}
         for r in tree_week_df.itertuples():
-            map_tinh_w[(str(r.tinh), str(r.w_key))] = map_tinh_w.get((str(r.tinh), str(r.w_key)), 0) + r.sl
-            map_bc_w[(str(r.tinh), str(r.bc), str(r.w_key))] = r.sl
+            map_tinh_w_sl[(str(r.tinh), str(r.w_key))] = map_tinh_w_sl.get((str(r.tinh), str(r.w_key)), 0) + r.sl
+            map_bc_w_sl[(str(r.tinh), str(r.bc), str(r.w_key))] = r.sl
+            map_tinh_w_dt[(str(r.tinh), str(r.w_key))] = map_tinh_w_dt.get((str(r.tinh), str(r.w_key)), 0) + r.dt
+            map_bc_w_dt[(str(r.tinh), str(r.bc), str(r.w_key))] = r.dt
 
-        map_tinh_m, map_bc_m = {}, {}
+        map_tinh_m_sl, map_bc_m_sl, map_tinh_m_dt, map_bc_m_dt = {}, {}, {}, {}
         for r in tree_month_df.itertuples():
-            map_tinh_m[(str(r.tinh), str(r.m_key))] = map_tinh_m.get((str(r.tinh), str(r.m_key)), 0) + r.sl
-            map_bc_m[(str(r.tinh), str(r.bc), str(r.m_key))] = r.sl
+            map_tinh_m_sl[(str(r.tinh), str(r.m_key))] = map_tinh_m_sl.get((str(r.tinh), str(r.m_key)), 0) + r.sl
+            map_bc_m_sl[(str(r.tinh), str(r.bc), str(r.m_key))] = r.sl
+            map_tinh_m_dt[(str(r.tinh), str(r.m_key))] = map_tinh_m_dt.get((str(r.tinh), str(r.m_key)), 0) + r.dt
+            map_bc_m_dt[(str(r.tinh), str(r.bc), str(r.m_key))] = r.dt
 
-        # Danh sách nhóm (Đã đổi buu_cuc_phat -> ma_buucuc_phat)
-        kh_list = con.execute(f"SELECT DISTINCT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chưa xác định') as kh FROM orders {base_where} ORDER BY 1").fetchdf()["kh"].tolist()
+        kh_list = con.execute(f"SELECT DISTINCT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh FROM orders {base_where} ORDER BY 1").fetchdf()["kh"].tolist()
+        tinh_bc_df = con.execute(f"SELECT DISTINCT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc FROM orders {base_where} ORDER BY 1, 2").fetchdf()
         
-        tinh_bc_df = con.execute(f"SELECT DISTINCT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chưa xác định') as bc FROM orders {base_where} ORDER BY 1, 2").fetchdf()
         tinh_hierarchy = {}
         for r in tinh_bc_df.itertuples():
             if str(r.tinh) not in tinh_hierarchy: tinh_hierarchy[str(r.tinh)] = []
             tinh_hierarchy[str(r.tinh)].append(str(r.bc))
 
-        # 4. RENDER CÁC HÀNG CON CHO PHẦN SẢN LƯỢNG
-        matrix_rows_list = []
-
-        # 4.1 Nhóm Mã KH (Ngang hàng Cấp 1)
-        matrix_rows_list.append("""
-        <tr class="sub-row-1 group_root" style="display:none; background-color: #eceff1; font-weight:bold;">
-            <td style="padding-left: 15px;" colspan="100%">👤 THEO MÃ KHÁCH HÀNG</td>
-        </tr>
-        """)
-        for idx_kh, kh_name in enumerate(kh_list):
-            d_vals_kh = [map_kh_d.get((kh_name, str(d)), 0) for d in day_cols]
-            w_vals_kh = [map_kh_w.get((kh_name, str(w)), 0) for w in week_cols]
-            m_vals_kh = [map_kh_m.get((kh_name, str(m)), 0) for m in month_cols]
-
-            dod_kh = ((d_vals_kh[-1] - d_vals_kh[-2])/d_vals_kh[-2]*100) if len(d_vals_kh)>1 and d_vals_kh[-2]>0 else 0
-            wow_kh = ((w_vals_kh[-1] - w_vals_kh[-2])/w_vals_kh[-2]*100) if len(w_vals_kh)>1 and w_vals_kh[-2]>0 else 0
-            mom_kh = ((m_vals_kh[1] - m_vals_kh[0])/m_vals_kh[0]*100) if len(m_vals_kh)>1 and m_vals_kh[0]>0 else 0
-
-            d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_kh])
-            w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_kh])
-            km0_val = m_vals_kh[0] if len(m_vals_kh) > 0 else 0
-            km1_val = m_vals_kh[1] if len(m_vals_kh) > 1 else km0_val
-
-            matrix_rows_list.append(f"""
-            <tr class="sub-row-2 group_root" style="display:none; background-color: #ffffff;">
-                <td style="padding-left: 25px;">🔹 KH: <b>{kh_name}</b></td>
-                {d_cells}{fmt_diff(dod_kh)}{w_cells}{fmt_diff(wow_kh)}<td>{km0_val:,.0f}</td><td><b>{km1_val:,.0f}</b></td>{fmt_diff(mom_kh)}
+        # Hàm helper render nhóm cây
+        def generate_tree_rows(prefix, map_kh_d, map_kh_w, map_kh_m, map_tinh_d, map_bc_d, map_tinh_w, map_bc_w, map_tinh_m, map_bc_m):
+            rows = []
+            # Khách hàng
+            rows.append(f"""
+            <tr class="sub-row-1 group_{prefix}_root" style="display:none; background-color: #f0f0f0; font-weight:bold;">
+                <td style="padding-left: 15px;" colspan="100%">Theo mã khách hàng</td>
             </tr>
             """)
+            for kh_name in kh_list:
+                d_vals = [map_kh_d.get((kh_name, str(d)), 0) for d in day_cols]
+                w_vals = [map_kh_w.get((kh_name, str(w)), 0) for w in week_cols]
+                m_vals = [map_kh_m.get((kh_name, str(m)), 0) for m in month_cols]
 
-        # 4.2 Nhóm Tỉnh phát -> Bưu cục phát (Cấp 1 -> Cấp 2)
-        matrix_rows_list.append("""
-        <tr class="sub-row-1 group_root" style="display:none; background-color: #eceff1; font-weight:bold;">
-            <td style="padding-left: 15px;" colspan="100%">📍 THEO TỈNH PHÁT & BƯU CỤC PHÁT</td>
-        </tr>
-        """)
-        for idx_tinh, (tinh_name, bcs_list) in enumerate(tinh_hierarchy.items()):
-            tinh_clean_id = f"tinh_{idx_tinh}"
-            
-            d_vals_tinh = [map_tinh_d.get((tinh_name, str(d)), 0) for d in day_cols]
-            w_vals_tinh = [map_tinh_w.get((tinh_name, str(w)), 0) for w in week_cols]
-            m_vals_tinh = [map_tinh_m.get((tinh_name, str(m)), 0) for m in month_cols]
+                dod = ((d_vals[-1] - d_vals[-2])/d_vals[-2]*100) if len(d_vals)>1 and d_vals[-2]>0 else 0
+                wow = ((w_vals[-1] - w_vals[-2])/w_vals[-2]*100) if len(w_vals)>1 and w_vals[-2]>0 else 0
+                mom = ((m_vals[1] - m_vals[0])/m_vals[0]*100) if len(m_vals)>1 and m_vals[0]>0 else 0
 
-            dod_tinh = ((d_vals_tinh[-1] - d_vals_tinh[-2])/d_vals_tinh[-2]*100) if len(d_vals_tinh)>1 and d_vals_tinh[-2]>0 else 0
-            wow_tinh = ((w_vals_tinh[-1] - w_vals_tinh[-2])/w_vals_tinh[-2]*100) if len(w_vals_tinh)>1 and w_vals_tinh[-2]>0 else 0
-            mom_tinh = ((m_vals_tinh[1] - m_vals_tinh[0])/m_vals_tinh[0]*100) if len(m_vals_tinh)>1 and m_vals_tinh[0]>0 else 0
+                d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals])
+                w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals])
+                m0 = m_vals[0] if len(m_vals) > 0 else 0
+                m1 = m_vals[1] if len(m_vals) > 1 else m0
 
-            t_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_tinh])
-            t_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_tinh])
-            tm0_val = m_vals_tinh[0] if len(m_vals_tinh) > 0 else 0
-            tm1_val = m_vals_tinh[1] if len(m_vals_tinh) > 1 else tm0_val
-
-            matrix_rows_list.append(f"""
-            <tr class="sub-row-2 group_root" style="display:none; background-color: #f4f6f8; font-weight:600; color: #1565c0;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
-                <td style="padding-left: 25px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> 📍 Tỉnh: <b>{tinh_name}</b></td>
-                {t_d_cells}{fmt_diff(dod_tinh)}{t_w_cells}{fmt_diff(wow_tinh)}<td>{tm0_val:,.0f}</td><td><b>{tm1_val:,.0f}</b></td>{fmt_diff(mom_tinh)}
-            </tr>
-            """)
-
-            for bc_name in bcs_list:
-                d_vals_bc = [map_bc_d.get((tinh_name, bc_name, str(d)), 0) for d in day_cols]
-                w_vals_bc = [map_bc_w.get((tinh_name, bc_name, str(w)), 0) for w in week_cols]
-                m_vals_bc = [map_bc_m.get((tinh_name, bc_name, str(m)), 0) for m in month_cols]
-
-                dod_bc = ((d_vals_bc[-1] - d_vals_bc[-2])/d_vals_bc[-2]*100) if len(d_vals_bc)>1 and d_vals_bc[-2]>0 else 0
-                wow_bc = ((w_vals_bc[-1] - w_vals_bc[-2])/w_vals_bc[-2]*100) if len(w_vals_bc)>1 and w_vals_bc[-2]>0 else 0
-                mom_bc = ((m_vals_bc[1] - m_vals_bc[0])/m_vals_bc[0]*100) if len(m_vals_bc)>1 and m_vals_bc[0]>0 else 0
-
-                b_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_bc])
-                b_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_bc])
-                bm0_val = m_vals_bc[0] if len(m_vals_bc) > 0 else 0
-                bm1_val = m_vals_bc[1] if len(m_vals_bc) > 1 else bm0_val
-
-                matrix_rows_list.append(f"""
-                <tr class="sub-row-3 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
-                    <td style="padding-left: 50px;">• Bưu cục: <b>{bc_name}</b></td>
-                    {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{bm0_val:,.0f}</td><td><b>{bm1_val:,.0f}</b></td>{fmt_diff(mom_bc)}
+                rows.append(f"""
+                <tr class="sub-row-2 group_{prefix}_root" style="display:none;">
+                    <td style="padding-left: 25px;">Mã KH: <b>{kh_name}</b></td>
+                    {d_cells}{fmt_diff(dod)}{w_cells}{fmt_diff(wow)}<td>{m0:,.0f}</td><td><b>{m1:,.0f}</b></td>{fmt_diff(mom)}
                 </tr>
                 """)
 
-        matrix_rows_html = "".join(matrix_rows_list)
+            # Tỉnh -> Bưu cục
+            rows.append(f"""
+            <tr class="sub-row-1 group_{prefix}_root" style="display:none; background-color: #f0f0f0; font-weight:bold;">
+                <td style="padding-left: 15px;" colspan="100%">Theo tỉnh phát & bưu cục phát</td>
+            </tr>
+            """)
+            for idx_tinh, (tinh_name, bcs_list) in enumerate(tinh_hierarchy.items()):
+                tinh_clean_id = f"{prefix}_tinh_{idx_tinh}"
+                
+                d_vals_tinh = [map_tinh_d.get((tinh_name, str(d)), 0) for d in day_cols]
+                w_vals_tinh = [map_tinh_w.get((tinh_name, str(w)), 0) for w in week_cols]
+                m_vals_tinh = [map_tinh_m.get((tinh_name, str(m)), 0) for m in month_cols]
+
+                dod_tinh = ((d_vals_tinh[-1] - d_vals_tinh[-2])/d_vals_tinh[-2]*100) if len(d_vals_tinh)>1 and d_vals_tinh[-2]>0 else 0
+                wow_tinh = ((w_vals_tinh[-1] - w_vals_tinh[-2])/w_vals_tinh[-2]*100) if len(w_vals_tinh)>1 and w_vals_tinh[-2]>0 else 0
+                mom_tinh = ((m_vals_tinh[1] - m_vals_tinh[0])/m_vals_tinh[0]*100) if len(m_vals_tinh)>1 and m_vals_tinh[0]>0 else 0
+
+                t_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_tinh])
+                t_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_tinh])
+                tm0 = m_vals_tinh[0] if len(m_vals_tinh) > 0 else 0
+                tm1 = m_vals_tinh[1] if len(m_vals_tinh) > 1 else tm0
+
+                rows.append(f"""
+                <tr class="sub-row-2 group_{prefix}_root" style="display:none; background-color: #fcfcfc;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
+                    <td style="padding-left: 25px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Tỉnh: <b>{tinh_name}</b></td>
+                    {t_d_cells}{fmt_diff(dod_tinh)}{t_w_cells}{fmt_diff(wow_tinh)}<td>{tm0:,.0f}</td><td><b>{tm1:,.0f}</b></td>{fmt_diff(mom_tinh)}
+                </tr>
+                """)
+
+                for bc_name in bcs_list:
+                    d_vals_bc = [map_bc_d.get((tinh_name, bc_name, str(d)), 0) for d in day_cols]
+                    w_vals_bc = [map_bc_w.get((tinh_name, bc_name, str(w)), 0) for w in week_cols]
+                    m_vals_bc = [map_bc_m.get((tinh_name, bc_name, str(m)), 0) for m in month_cols]
+
+                    dod_bc = ((d_vals_bc[-1] - d_vals_bc[-2])/d_vals_bc[-2]*100) if len(d_vals_bc)>1 and d_vals_bc[-2]>0 else 0
+                    wow_bc = ((w_vals_bc[-1] - w_vals_bc[-2])/w_vals_bc[-2]*100) if len(w_vals_bc)>1 and w_vals_bc[-2]>0 else 0
+                    mom_bc = ((m_vals_bc[1] - m_vals_bc[0])/m_vals_bc[0]*100) if len(m_vals_bc)>1 and m_vals_bc[0]>0 else 0
+
+                    b_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_bc])
+                    b_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_bc])
+                    bm0 = m_vals_bc[0] if len(m_vals_bc) > 0 else 0
+                    bm1 = m_vals_bc[1] if len(m_vals_bc) > 1 else bm0
+
+                    rows.append(f"""
+                    <tr class="sub-row-3 {tinh_clean_id}" style="display:none; color: #555;">
+                        <td style="padding-left: 45px;">- Bưu cục: {bc_name}</td>
+                        {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{bm0:,.0f}</td><td><b>{bm1:,.0f}</b></td>{fmt_diff(mom_bc)}
+                    </tr>
+                    """)
+            return "".join(rows)
+
+        sl_rows_html = generate_tree_rows("sl", map_kh_d_sl, map_kh_w_sl, map_kh_m_sl, map_tinh_d_sl, map_bc_d_sl, map_tinh_w_sl, map_bc_w_sl, map_tinh_m_sl, map_bc_m_sl)
+        dt_rows_html = generate_tree_rows("dt", map_kh_d_dt, map_kh_w_dt, map_kh_m_dt, map_tinh_d_dt, map_bc_d_dt, map_tinh_w_dt, map_bc_w_dt, map_tinh_m_dt, map_bc_m_dt)
 
         n_day_cols = len(day_labels)
         n_week_cols = len(week_labels)
@@ -484,37 +497,37 @@ def render(file_id=None):
         m0_dt = v_m_dt[0] if len(v_m_dt) > 0 else 0
         m1_dt = v_m_dt[1] if len(v_m_dt) > 1 else m0_dt
 
-        # 5. RENDER CHUẨN HTML
+        # 4. RENDER HTML THEO PHONG CÁCH ODR (GỌN VÀ TỐI GIẢN)
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
-            .matrix-table {{ width: 100%; border-collapse: collapse; font-size: 11.5px; background-color: #ffffff; color: #111111; border: 1px solid #222222; }}
-            .matrix-table th {{ background-color: #222222; color: #ffffff; text-align: center; padding: 7px 4px; border: 1px solid #444444; font-weight: 600; font-size: 11px; }}
-            .matrix-table td {{ padding: 6px 8px; border: 1px solid #dddddd; vertical-align: middle; text-align: right; }}
+            .matrix-table {{ width: 100%; border-collapse: collapse; font-size: 11px; background-color: #ffffff; color: #222222; border: 1px solid #ccc; }}
+            .matrix-table th {{ background-color: #333333; color: #ffffff; text-align: center; padding: 5px 3px; border: 1px solid #555; font-weight: 600; }}
+            .matrix-table td {{ padding: 5px 6px; border: 1px solid #e0e0e0; vertical-align: middle; text-align: right; }}
             .matrix-table td:first-child {{ text-align: left; }}
-            .row-group {{ font-weight: bold; background-color: #f8f9fa; cursor: pointer; }}
-            .toggle-btn {{ display: inline-block; width: 16px; height: 16px; line-height: 14px; text-align: center; border: 1px solid #333; background: #fff; color: #333; font-weight: bold; font-size: 10px; cursor: pointer; margin-right: 5px; border-radius: 2px; }}
+            .row-group {{ font-weight: bold; background-color: #f5f5f5; cursor: pointer; }}
+            .toggle-btn {{ display: inline-block; width: 15px; height: 15px; line-height: 13px; text-align: center; border: 1px solid #666; background: #fff; color: #333; font-weight: bold; font-size: 10px; cursor: pointer; margin-right: 4px; border-radius: 2px; }}
             .text-green {{ color: #2e7d32; font-weight: bold; }}
             .text-red {{ color: #c62828; font-weight: bold; }}
         </style></head><body>
         <table class="matrix-table">
             <thead>
                 <tr>
-                    <th rowspan="2" style="width: 28%;">Chỉ tiêu</th>
-                    <th colspan="{n_day_cols + 1}" style="background-color: #2a2a2a;">{n_day_cols} ngày gần nhất</th>
-                    <th colspan="{n_week_cols + 1}" style="background-color: #333333;">{n_week_cols} tuần gần nhất</th>
-                    <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
+                    <th rowspan="2" style="width: 25%;">Chỉ tiêu</th>
+                    <th colspan="{n_day_cols + 1}">{n_day_cols} ngày gần nhất</th>
+                    <th colspan="{n_week_cols + 1}">{n_week_cols} tuần gần nhất</th>
+                    <th colspan="3">Tháng</th>
                 </tr>
                 <tr>
-                    {"".join([f"<th>{d}</th>" for d in day_labels])}<th style="color: #ff5252;">DoD</th>
-                    {"".join([f"<th>{w}</th>" for w in week_labels])}<th style="color: #ff5252;">WoW</th>
-                    <th>M-1</th><th>M</th><th style="color: #ff5252;">MoM</th>
+                    {"".join([f"<th>{d}</th>" for d in day_labels])}<th>DoD</th>
+                    {"".join([f"<th>{w}</th>" for w in week_labels])}<th>WoW</th>
+                    <th>M-1</th><th>M</th><th>MoM</th>
                 </tr>
             </thead>
             <tbody>
                 <!-- 1. SẢN LƯỢNG PHÁT -->
-                <tr class="row-group" onclick="toggleRow('group_root', event, 'btn_root')">
-                    <td><span class="toggle-btn" id="btn_root">[+]</span> 📦 <b>Sản lượng phát (Đơn)</b></td>
+                <tr class="row-group" onclick="toggleRow('group_sl_root', event, 'btn_sl_root')">
+                    <td><span class="toggle-btn" id="btn_sl_root">[+]</span> <b>Sản lượng phát (Đơn)</b></td>
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_d_sl])}
                     {fmt_diff(dod_sl)}
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_w_sl])}
@@ -522,12 +535,11 @@ def render(file_id=None):
                     <td>{m0_sl:,.0f}</td><td><b>{m1_sl:,.0f}</b></td>
                     {fmt_diff(mom_sl)}
                 </tr>
-
-                {matrix_rows_html}
+                {sl_rows_html}
 
                 <!-- 2. DOANH THU -->
-                <tr style="background-color: #f1f8e9;">
-                    <td style="font-weight: bold;">💰 Doanh thu (VNĐ)</td>
+                <tr class="row-group" onclick="toggleRow('group_dt_root', event, 'btn_dt_root')">
+                    <td><span class="toggle-btn" id="btn_dt_root">[+]</span> <b>Doanh thu (VNĐ)</b></td>
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_d_dt])}
                     {fmt_diff(dod_dt)}
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_w_dt])}
@@ -535,6 +547,7 @@ def render(file_id=None):
                     <td>{m0_dt:,.0f}</td><td><b>{m1_dt:,.0f}</b></td>
                     {fmt_diff(mom_dt)}
                 </tr>
+                {dt_rows_html}
             </tbody>
         </table>
 
@@ -552,7 +565,7 @@ def render(file_id=None):
             }}
         </script></body></html>
         """
-        components.html(matrix_full_html, height=520, scrolling=True)
+        components.html(matrix_full_html, height=550, scrolling=True)
 
     except Exception as e:
         st.error(f"Lỗi tính toán Ma trận Doanh thu & Sản lượng: {e}")
