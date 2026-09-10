@@ -17,42 +17,73 @@ def render(file_id=None):
         st.error(f"Lỗi kết nối cơ sở dữ liệu: {e}")
         return
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
+   # ---------------------------------------------------------
+    # 1. KHỞI TẠO STATE BỘ LỌC CHO TAB DOANH THU
     # ---------------------------------------------------------
-    # 1. KHỞI TẠO DỮ LIỆU BỘ LỌC FOR TAB DOANH THU
+    if "f_dt_date" not in st.session_state or not st.session_state.f_dt_date:
+        today = date.today()
+        first_day_of_month = today.replace(day=1)
+        st.session_state.f_dt_date = (first_day_of_month, today)
+
+    if "f_dt_kh" not in st.session_state: st.session_state.f_dt_kh = []
+    if "f_dt_ld" not in st.session_state: st.session_state.f_dt_ld = []
+    if "f_dt_tl" not in st.session_state: st.session_state.f_dt_tl = []
+
+    # Hàm trợ giúp tạo mệnh đề SQL IN (...) an toàn chống SQL Injection
+    def sql_in_clause(column_name, selected_list):
+        if not selected_list:
+            return None
+        escaped = [str(x).replace("'", "''") for x in selected_list]
+        vals = ", ".join([f"'{x}'" for x in escaped])
+        return f"CAST({column_name} AS VARCHAR) IN ({vals})"
+
+    # Hàm dựng câu lệnh WHERE cho Cross-Filtering Tab Doanh Thu
+    def build_where_dt(exclude=None):
+        conds = ["1=1"]
+        # Lọc theo clean_date của tab Doanh Thu
+        if exclude != "date" and isinstance(st.session_state.f_dt_date, (list, tuple)) and len(st.session_state.f_dt_date) == 2:
+            conds.append(f"clean_date BETWEEN '{st.session_state.f_dt_date[0]}' AND '{st.session_state.f_dt_date[1]}'")
+        
+        if exclude != "kh":
+            c = sql_in_clause("ma_khgui", st.session_state.f_dt_kh)
+            if c: conds.append(c)
+        if exclude != "ld":
+            c = sql_in_clause("ma_dv_viettel", st.session_state.f_dt_ld)
+            if c: conds.append(c)
+        if exclude != "tl":
+            c = sql_in_clause("nhom_trong_luong", st.session_state.f_dt_tl)
+            if c: conds.append(c)
+            
+        return " AND ".join(conds)
+
+    # MỆNH ĐỀ WHERE TOÀN CỤC CHO TAB DOANH THU
+    where_sql_dt = build_where_dt()
+
     # ---------------------------------------------------------
-    def get_options(query):
-        try:
-            res = con.execute(query).fetchall()
-            return ["Tất cả"] + [row[0] for row in res if row[0] is not None]
-        except Exception:
-            return ["Tất cả"]
+    # 2. LẤY DANH SÁCH OPTION TỰ ĐỘNG (CROSS-FILTERING)
+    # ---------------------------------------------------------
+    kh_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_khgui AS VARCHAR) FROM orders WHERE {build_where_dt('kh')} AND ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
+    ld_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {build_where_dt('ld')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
+    tl_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(nhom_trong_luong AS VARCHAR) FROM orders WHERE {build_where_dt('tl')} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
 
-    kh_list = get_options("SELECT DISTINCT ma_khgui FROM orders WHERE ma_khgui IS NOT NULL ORDER BY 1")
-    dt_list = get_options("SELECT DISTINCT ma_doitac FROM orders WHERE ma_doitac IS NOT NULL ORDER BY 1")
-    tinh_list = get_options("SELECT DISTINCT tinh_phat FROM orders WHERE tinh_phat IS NOT NULL ORDER BY 1")
+    # Validate lọc sạch các value cũ không còn nằm trong danh sách tùy chọn mới
+    st.session_state.f_dt_kh = [v for v in st.session_state.f_dt_kh if v in kh_opts]
+    st.session_state.f_dt_ld = [v for v in st.session_state.f_dt_ld if v in ld_opts]
+    st.session_state.f_dt_tl = [v for v in st.session_state.f_dt_tl if v in tl_opts]
 
     # ---------------------------------------------------------
-    # 2. GIAO DIỆN BỘ LỌC (FILTERS)
+    # 3. HIỂN THỊ BỘ LỌC NGANG DÀN ĐỀU trên 4 CỘT
     # ---------------------------------------------------------
-    f1, f2, f3, f4, f5, f6 = st.columns(6)
-    with f1: filter_date_dt = st.date_input("NGÀY", value=(), key="dt_filter_date")
-    with f2: filter_kh_dt = st.selectbox("MÃ KHÁCH HÀNG", kh_list, key="dt_filter_kh")
-    with f3: filter_dt_dt = st.selectbox("MÃ ĐỐI TÁC", dt_list, key="dt_filter_dt")
-    with f4: filter_cn_dt = st.selectbox("TỈNH PHÁT", tinh_list, key="dt_filter_cn")
-    with f5: filter_ld_dt = st.selectbox("LOẠI ĐƠN", ["Tất cả"], key="dt_filter_ld")
-    with f6: filter_tl_dt = st.selectbox("TRỌNG LƯỢNG", ["Tất cả", "< 500g", "500g - 2kg", "> 2kg"], key="dt_filter_tl")
+    dtf1, dtf2, dtf3, dtf4 = st.columns(4)
 
-    # Xây dựng câu lệnh WHERE động
-    where_clauses_dt = ["1=1"]
-    if filter_cn_dt != "Tất cả": where_clauses_dt.append(f"tinh_phat = '{filter_cn_dt}'")
-    if filter_dt_dt != "Tất cả": where_clauses_dt.append(f"ma_doitac = '{filter_dt_dt}'")
-    if filter_kh_dt != "Tất cả": where_clauses_dt.append(f"ma_khgui = '{filter_kh_dt}'")
-    
-    if isinstance(filter_date_dt, (list, tuple)) and len(filter_date_dt) == 2:
-        start_d, end_d = filter_date_dt[0], filter_date_dt[1]
-        where_clauses_dt.append(f"clean_date BETWEEN '{start_d}' AND '{end_d}'")
-
-    where_sql_dt = " AND ".join(where_clauses_dt)
+    with dtf1:
+        st.date_input("NGÀY", key="f_dt_date")
+    with dtf2:
+        st.multiselect("MÃ KHÁCH HÀNG", kh_opts, key="f_dt_kh", placeholder="Tất cả")
+    with dtf3:
+        st.multiselect("LOẠI ĐƠN (DV)", ld_opts, key="f_dt_ld", placeholder="Tất cả")
+    with dtf4:
+        st.multiselect("TRỌNG LƯỢNG", tl_opts, key="f_dt_tl", placeholder="Tất cả")
 
     # ---------------------------------------------------------
     # 3. TRUY VẤN METRICS TỔNG QUAN
