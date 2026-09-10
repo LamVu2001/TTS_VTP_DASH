@@ -84,50 +84,42 @@ def render(file_id=None):
         st.multiselect("TRỌNG LƯỢNG", tl_opts, key="f_dt_tl", placeholder="Tất cả")
 
     # ---------------------------------------------------------
-    # 3. TRUY VẤN METRICS TỔNG QUAN
+    # 3. HIỂN THỊ METRICS TỔNG QUAN
     # ---------------------------------------------------------
     try:
+        # Truy vấn tính Tổng doanh thu (tong_cuoc) và Tổng sản lượng (COUNT ma_phieugui)
         res_metrics = con.execute(f"""
-            SELECT COALESCE(SUM(tong_cuoc), 0) / 1e9, COUNT(ma_phieugui)
-            FROM orders WHERE {where_sql_dt}
+            SELECT 
+                COALESCE(SUM(tong_cuoc), 0) / 1e9 AS tong_doanh_thu,
+                COUNT(ma_phieugui) AS tong_san_luong
+            FROM orders 
+            WHERE {where_sql_dt}
         """).fetchone()
+
         tong_dt = res_metrics[0] if res_metrics and res_metrics[0] else 0.0
         tong_sl = res_metrics[1] if res_metrics and res_metrics[1] else 0
-    except Exception:
+    except Exception as e:
+        st.error(f"Lỗi tính toán metrics: {e}")
         tong_dt, tong_sl = 0.0, 0
 
-    # CSS cho Metric Cards
-    st.markdown("""
-        <style>
-            .metric-card {
-                background-color: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 12px;
-                text-align: center;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            }
-            .metric-title { font-size: 11px; font-weight: bold; color: #6c757d; text-transform: uppercase; }
-            .metric-value { font-size: 20px; font-weight: bold; color: #212529; margin: 4px 0; }
-            .metric-sub-green { font-size: 11px; color: #2e7d32; font-weight: 600; }
-            .metric-sub-red { font-size: 11px; color: #c62828; font-weight: 600; }
-        </style>
-    """, unsafe_allow_html=True)
+    # Chia màn hình thành 2 cột hiển thị gọn gàng
+    m1, m2 = st.columns(2)
 
-    # Hiển thị Metric Cards
-    m1, m2, m3, m4, m5 = st.columns(5)
     with m1:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">DOANH THU HÔM NAY</div><div class="metric-value">{tong_dt:,.2f} tỷ</div><div class="metric-sub-green">▲ +6.81% vs Mục tiêu</div></div>', unsafe_allow_html=True)
-    with m2:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SS CÙNG KỲ TUẦN TRƯỚC</div><div class="metric-value">{(tong_dt*0.9):,.2f} tỷ</div><div class="metric-sub-red">▼ -5.22% WoW</div></div>', unsafe_allow_html=True)
-    with m3: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">LŨY KẾ THÁNG (M)</div><div class="metric-value">{tong_dt:,.2f} tỷ</div><div class="metric-sub-green">▲ +6.81% MoM</div></div>', unsafe_allow_html=True)
-    with m4:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">DỰ KIẾN DOANH THU FM</div><div class="metric-value">{(tong_dt*1.1):,.2f} tỷ</div><div style="font-size: 10px; color: #777;">Dự phóng cuối tháng</div></div>', unsafe_allow_html=True)
-    with m5:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỔNG SẢN LƯỢNG</div><div class="metric-value">{tong_sl:,.0f}</div><div class="metric-sub-green">▲Đơn thực tế</div></div>', unsafe_allow_html=True)
+        st.metric(
+            label="TỔNG DOANH THU",
+            value=f"{tong_dt:,.2f} tỷ",
+            delta="Tổng cước thực tế"
+        )
 
-    st.write("")
+    with m2:
+        st.metric(
+            label="TỔNG SẢN LƯỢNG",
+            value=f"{tong_sl:,.0f}",
+            delta="Đơn thực tế"
+        )
+
+    
     c_chart, c_top = st.columns([2, 1.3])
     
     with c_chart:
