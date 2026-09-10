@@ -111,7 +111,7 @@ def render(file_id=None):
     with m1:
         st.metric(
             label="TỔNG DOANH THU",
-            value=f"{tong_dt:,.2f} tỷ"
+            value = f"{(tong_dt or 0):,.2f} tỷ"
         )
 
     with m2:
