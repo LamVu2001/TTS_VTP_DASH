@@ -612,8 +612,8 @@ def render(file_id: str):
                 COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
                 COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) as sl_ptc1,
                 COUNT(DISTINCT CASE WHEN PTC_1 = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
-                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) as sl_inday,
-                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) as sl_nextday
+                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) as sl_inday,
+                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) as sl_nextday
             FROM orders
             WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
             GROUP BY 1, 2, 3, 4, 5, 6
