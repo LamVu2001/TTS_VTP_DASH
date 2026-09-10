@@ -237,12 +237,14 @@ def render(file_id=None):
         except Exception as e:
             st.error(f"Lỗi truy vấn Top khách hàng: {e}")
     st.divider()
+   # ---------------------------------------------------------
+    # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (OPTIMIZED & AUTO-ROUND)
     # ---------------------------------------------------------
-    # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (CHUẨN THEO TAB ODR)
-    # ---------------------------------------------------------
-    st.subheader("BAO CAO MA TRAN DOANH THU & SAN LUONG")
+    st.subheader("BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG")
 
     try:
+        from collections import defaultdict
+
         base_where = f"WHERE {where_sql_dt}" if where_sql_dt else ""
 
         # 1. LẤY MỐC THỜI GIAN
@@ -286,30 +288,18 @@ def render(file_id=None):
 
         # 2. AGGREGATE BẢNG TỔNG
         df_d = con.execute(f"""
-            SELECT 
-                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key,
-                COUNT(DISTINCT ma_phieugui) as sl,
-                COALESCE(SUM(tong_cuoc), 0) as dt
-            FROM orders {base_where}
-            GROUP BY 1
+            SELECT STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt
+            FROM orders {base_where} GROUP BY 1
         """).fetchdf()
 
         df_w = con.execute(f"""
-            SELECT 
-                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key,
-                COUNT(DISTINCT ma_phieugui) as sl,
-                COALESCE(SUM(tong_cuoc), 0) as dt
-            FROM orders {base_where}
-            GROUP BY 1
+            SELECT STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt
+            FROM orders {base_where} GROUP BY 1
         """).fetchdf()
 
         df_m = con.execute(f"""
-            SELECT 
-                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key,
-                COUNT(DISTINCT ma_phieugui) as sl,
-                COALESCE(SUM(tong_cuoc), 0) as dt
-            FROM orders {base_where}
-            GROUP BY 1
+            SELECT STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt
+            FROM orders {base_where} GROUP BY 1
         """).fetchdf()
 
         dict_d = {str(row.d_key): row for row in df_d.itertuples()} if df_d is not None and not df_d.empty else {}
@@ -348,28 +338,16 @@ def render(file_id=None):
         wow_dt = ((v_w_dt[-1] - v_w_dt[-2])/v_w_dt[-2]*100) if len(v_w_dt)>1 and v_w_dt[-2]>0 else 0
         mom_dt = ((v_m_dt[1] - v_m_dt[0])/v_m_dt[0]*100) if len(v_m_dt)>1 and v_m_dt[0]>0 else 0
 
-        # 3. TRUY VẤN CHI TIẾT
-        kh_day_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2
-        """).fetchdf()
-        kh_week_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2
-        """).fetchdf()
-        kh_month_df = con.execute(f"""
-            SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2
-        """).fetchdf()
+        # 3. TRUY VẤN CHI TIẾT (TỐI ƯU CÂY DỮ LIỆU)
+        kh_day_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
+        kh_week_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
+        kh_month_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
 
-        tree_day_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3
-        """).fetchdf()
-        tree_week_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3
-        """).fetchdf()
-        tree_month_df = con.execute(f"""
-            SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3
-        """).fetchdf()
+        tree_day_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
+        tree_week_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
+        tree_month_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
 
-        # Build Maps an toàn
+        # Build Maps
         map_kh_d_sl, map_kh_w_sl, map_kh_m_sl = {}, {}, {}
         map_kh_d_dt, map_kh_w_dt, map_kh_m_dt = {}, {}, {}
         
@@ -386,28 +364,28 @@ def render(file_id=None):
                 map_kh_m_sl[(str(r.kh), str(r.m_key))] = r.sl
                 map_kh_m_dt[(str(r.kh), str(r.m_key))] = r.dt
 
-        map_tinh_d_sl, map_bc_d_sl, map_tinh_d_dt, map_bc_d_dt = {}, {}, {}, {}
+        map_tinh_d_sl, map_bc_d_sl, map_tinh_d_dt, map_bc_d_dt = defaultdict(float), {}, defaultdict(float), {}
         if tree_day_df is not None and not tree_day_df.empty:
             for r in tree_day_df.itertuples():
-                map_tinh_d_sl[(str(r.tinh), str(r.d_key))] = map_tinh_d_sl.get((str(r.tinh), str(r.d_key)), 0) + r.sl
+                map_tinh_d_sl[(str(r.tinh), str(r.d_key))] += r.sl
                 map_bc_d_sl[(str(r.tinh), str(r.bc), str(r.d_key))] = r.sl
-                map_tinh_d_dt[(str(r.tinh), str(r.d_key))] = map_tinh_d_dt.get((str(r.tinh), str(r.d_key)), 0) + r.dt
+                map_tinh_d_dt[(str(r.tinh), str(r.d_key))] += r.dt
                 map_bc_d_dt[(str(r.tinh), str(r.bc), str(r.d_key))] = r.dt
 
-        map_tinh_w_sl, map_bc_w_sl, map_tinh_w_dt, map_bc_w_dt = {}, {}, {}, {}
+        map_tinh_w_sl, map_bc_w_sl, map_tinh_w_dt, map_bc_w_dt = defaultdict(float), {}, defaultdict(float), {}
         if tree_week_df is not None and not tree_week_df.empty:
             for r in tree_week_df.itertuples():
-                map_tinh_w_sl[(str(r.tinh), str(r.w_key))] = map_tinh_w_sl.get((str(r.tinh), str(r.w_key)), 0) + r.sl
+                map_tinh_w_sl[(str(r.tinh), str(r.w_key))] += r.sl
                 map_bc_w_sl[(str(r.tinh), str(r.bc), str(r.w_key))] = r.sl
-                map_tinh_w_dt[(str(r.tinh), str(r.w_key))] = map_tinh_w_dt.get((str(r.tinh), str(r.w_key)), 0) + r.dt
+                map_tinh_w_dt[(str(r.tinh), str(r.w_key))] += r.dt
                 map_bc_w_dt[(str(r.tinh), str(r.bc), str(r.w_key))] = r.dt
 
-        map_tinh_m_sl, map_bc_m_sl, map_tinh_m_dt, map_bc_m_dt = {}, {}, {}, {}
+        map_tinh_m_sl, map_bc_m_sl, map_tinh_m_dt, map_bc_m_dt = defaultdict(float), {}, defaultdict(float), {}
         if tree_month_df is not None and not tree_month_df.empty:
             for r in tree_month_df.itertuples():
-                map_tinh_m_sl[(str(r.tinh), str(r.m_key))] = map_tinh_m_sl.get((str(r.tinh), str(r.m_key)), 0) + r.sl
+                map_tinh_m_sl[(str(r.tinh), str(r.m_key))] += r.sl
                 map_bc_m_sl[(str(r.tinh), str(r.bc), str(r.m_key))] = r.sl
-                map_tinh_m_dt[(str(r.tinh), str(r.m_key))] = map_tinh_m_dt.get((str(r.tinh), str(r.m_key)), 0) + r.dt
+                map_tinh_m_dt[(str(r.tinh), str(r.m_key))] += r.dt
                 map_bc_m_dt[(str(r.tinh), str(r.bc), str(r.m_key))] = r.dt
 
         kh_df_raw = con.execute(f"SELECT DISTINCT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh FROM orders {base_where} ORDER BY 1").fetchdf()
@@ -415,21 +393,22 @@ def render(file_id=None):
 
         tinh_bc_df = con.execute(f"SELECT DISTINCT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc FROM orders {base_where} ORDER BY 1, 2").fetchdf()
         
-        tinh_hierarchy = {}
+        tinh_hierarchy = defaultdict(list)
         if tinh_bc_df is not None and not tinh_bc_df.empty:
             for r in tinh_bc_df.itertuples():
-                tinh_val = str(r.tinh)
-                if tinh_val not in tinh_hierarchy: 
-                    tinh_hierarchy[tinh_val] = []
-                tinh_hierarchy[tinh_val].append(str(r.bc))
+                tinh_hierarchy[str(r.tinh)].append(str(r.bc))
 
-        # Helper render cây
-        def generate_tree_rows(prefix, map_kh_d, map_kh_w, map_kh_m, map_tinh_d, map_bc_d, map_tinh_w, map_bc_w, map_tinh_m, map_bc_m):
+        # Helper render cây đa cấp (Hỗ trợ 3 cấp bấm mở + Làm tròn số doanh thu)
+        def generate_tree_rows(prefix, map_kh_d, map_kh_w, map_kh_m, map_tinh_d, map_bc_d, map_tinh_w, map_bc_w, map_tinh_m, map_bc_m, is_currency=False):
             rows = []
+            def fmt_val(v): return f"{round(v):,.0f}" if is_currency else f"{v:,.0f}"
+
+            # 1. NHÓM THEO MÃ KHÁCH HÀNG
             if kh_list:
+                kh_header_id = f"group_{prefix}_kh_header"
                 rows.append(f"""
-                <tr class="sub-row-1 group_{prefix}_root" style="display:none; background-color: #f0f0f0; font-weight:bold;">
-                    <td style="padding-left: 15px;" colspan="100%">Theo mã khách hàng</td>
+                <tr class="sub-row-1 group_{prefix}_root" style="display:none; background-color: #f0f0f0; font-weight:bold; cursor: pointer;" onclick="toggleRow('{kh_header_id}', event, 'btn_{kh_header_id}')">
+                    <td style="padding-left: 15px;" colspan="100%"><span class="toggle-btn" id="btn_{kh_header_id}">[+]</span> Theo mã khách hàng</td>
                 </tr>
                 """)
                 for kh_name in kh_list:
@@ -441,22 +420,24 @@ def render(file_id=None):
                     wow = ((w_vals[-1] - w_vals[-2])/w_vals[-2]*100) if len(w_vals)>1 and w_vals[-2]>0 else 0
                     mom = ((m_vals[1] - m_vals[0])/m_vals[0]*100) if len(m_vals)>1 and m_vals[0]>0 else 0
 
-                    d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals])
-                    w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals])
+                    d_cells = "".join([f"<td>{fmt_val(v)}</td>" for v in d_vals])
+                    w_cells = "".join([f"<td>{fmt_val(v)}</td>" for v in w_vals])
                     m0 = m_vals[0] if len(m_vals) > 0 else 0
                     m1 = m_vals[1] if len(m_vals) > 1 else m0
 
                     rows.append(f"""
-                    <tr class="sub-row-2 group_{prefix}_root" style="display:none;">
-                        <td style="padding-left: 25px;">Mã KH: <b>{kh_name}</b></td>
-                        {d_cells}{fmt_diff(dod)}{w_cells}{fmt_diff(wow)}<td>{m0:,.0f}</td><td><b>{m1:,.0f}</b></td>{fmt_diff(mom)}
+                    <tr class="sub-row-2 {kh_header_id}" style="display:none;">
+                        <td style="padding-left: 35px;">Mã KH: <b>{kh_name}</b></td>
+                        {d_cells}{fmt_diff(dod)}{w_cells}{fmt_diff(wow)}<td>{fmt_val(m0)}</td><td><b>{fmt_val(m1)}</b></td>{fmt_diff(mom)}
                     </tr>
                     """)
 
+            # 2. NHÓM THEO TỈNH PHÁT & BƯU CỤC PHÁT
             if tinh_hierarchy:
+                tinh_header_id = f"group_{prefix}_tinh_header"
                 rows.append(f"""
-                <tr class="sub-row-1 group_{prefix}_root" style="display:none; background-color: #f0f0f0; font-weight:bold;">
-                    <td style="padding-left: 15px;" colspan="100%">Theo tỉnh phát & bưu cục phát</td>
+                <tr class="sub-row-1 group_{prefix}_root" style="display:none; background-color: #f0f0f0; font-weight:bold; cursor: pointer;" onclick="toggleRow('{tinh_header_id}', event, 'btn_{tinh_header_id}')">
+                    <td style="padding-left: 15px;" colspan="100%"><span class="toggle-btn" id="btn_{tinh_header_id}">[+]</span> Theo tỉnh phát & bưu cục phát</td>
                 </tr>
                 """)
                 for idx_tinh, (tinh_name, bcs_list) in enumerate(tinh_hierarchy.items()):
@@ -470,15 +451,15 @@ def render(file_id=None):
                     wow_tinh = ((w_vals_tinh[-1] - w_vals_tinh[-2])/w_vals_tinh[-2]*100) if len(w_vals_tinh)>1 and w_vals_tinh[-2]>0 else 0
                     mom_tinh = ((m_vals_tinh[1] - m_vals_tinh[0])/m_vals_tinh[0]*100) if len(m_vals_tinh)>1 and m_vals_tinh[0]>0 else 0
 
-                    t_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_tinh])
-                    t_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_tinh])
+                    t_d_cells = "".join([f"<td>{fmt_val(v)}</td>" for v in d_vals_tinh])
+                    t_w_cells = "".join([f"<td>{fmt_val(v)}</td>" for v in w_vals_tinh])
                     tm0 = m_vals_tinh[0] if len(m_vals_tinh) > 0 else 0
                     tm1 = m_vals_tinh[1] if len(m_vals_tinh) > 1 else tm0
 
                     rows.append(f"""
-                    <tr class="sub-row-2 group_{prefix}_root" style="display:none; background-color: #fcfcfc;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
-                        <td style="padding-left: 25px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Tỉnh: <b>{tinh_name}</b></td>
-                        {t_d_cells}{fmt_diff(dod_tinh)}{t_w_cells}{fmt_diff(wow_tinh)}<td>{tm0:,.0f}</td><td><b>{tm1:,.0f}</b></td>{fmt_diff(mom_tinh)}
+                    <tr class="sub-row-2 {tinh_header_id}" style="display:none; background-color: #fcfcfc; cursor: pointer;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
+                        <td style="padding-left: 35px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Tỉnh: <b>{tinh_name}</b></td>
+                        {t_d_cells}{fmt_diff(dod_tinh)}{t_w_cells}{fmt_diff(wow_tinh)}<td>{fmt_val(tm0)}</td><td><b>{fmt_val(tm1)}</b></td>{fmt_diff(mom_tinh)}
                     </tr>
                     """)
 
@@ -491,21 +472,21 @@ def render(file_id=None):
                         wow_bc = ((w_vals_bc[-1] - w_vals_bc[-2])/w_vals_bc[-2]*100) if len(w_vals_bc)>1 and w_vals_bc[-2]>0 else 0
                         mom_bc = ((m_vals_bc[1] - m_vals_bc[0])/m_vals_bc[0]*100) if len(m_vals_bc)>1 and m_vals_bc[0]>0 else 0
 
-                        b_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_bc])
-                        b_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_bc])
+                        b_d_cells = "".join([f"<td>{fmt_val(v)}</td>" for v in d_vals_bc])
+                        b_w_cells = "".join([f"<td>{fmt_val(v)}</td>" for v in w_vals_bc])
                         bm0 = m_vals_bc[0] if len(m_vals_bc) > 0 else 0
                         bm1 = m_vals_bc[1] if len(m_vals_bc) > 1 else bm0
 
                         rows.append(f"""
-                        <tr class="sub-row-3 {tinh_clean_id}" style="display:none; color: #555;">
-                            <td style="padding-left: 45px;">- Bưu cục: {bc_name}</td>
-                            {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{bm0:,.0f}</td><td><b>{bm1:,.0f}</b></td>{fmt_diff(mom_bc)}
+                        <tr class="sub-row-3 {tinh_header_id} {tinh_clean_id}" style="display:none; color: #555;">
+                            <td style="padding-left: 55px;">- Bưu cục: {bc_name}</td>
+                            {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{fmt_val(bm0)}</td><td><b>{fmt_val(bm1)}</b></td>{fmt_diff(mom_bc)}
                         </tr>
                         """)
             return "".join(rows)
 
-        sl_rows_html = generate_tree_rows("sl", map_kh_d_sl, map_kh_w_sl, map_kh_m_sl, map_tinh_d_sl, map_bc_d_sl, map_tinh_w_sl, map_bc_w_sl, map_tinh_m_sl, map_bc_m_sl)
-        dt_rows_html = generate_tree_rows("dt", map_kh_d_dt, map_kh_w_dt, map_kh_m_dt, map_tinh_d_dt, map_bc_d_dt, map_tinh_w_dt, map_bc_w_dt, map_tinh_m_dt, map_bc_m_dt)
+        sl_rows_html = generate_tree_rows("sl", map_kh_d_sl, map_kh_w_sl, map_kh_m_sl, map_tinh_d_sl, map_bc_d_sl, map_tinh_w_sl, map_bc_w_sl, map_tinh_m_sl, map_bc_m_sl, is_currency=False)
+        dt_rows_html = generate_tree_rows("dt", map_kh_d_dt, map_kh_w_dt, map_kh_m_dt, map_tinh_d_dt, map_bc_d_dt, map_tinh_w_dt, map_bc_w_dt, map_tinh_m_dt, map_bc_m_dt, is_currency=True)
 
         n_day_cols = len(day_labels)
         n_week_cols = len(week_labels)
@@ -559,11 +540,11 @@ def render(file_id=None):
                 <!-- 2. DOANH THU -->
                 <tr class="row-group" onclick="toggleRow('group_dt_root', event, 'btn_dt_root')">
                     <td><span class="toggle-btn" id="btn_dt_root">[+]</span> <b>Doanh thu (VNĐ)</b></td>
-                    {"".join([f"<td>{v:,.0f}</td>" for v in v_d_dt])}
+                    {"".join([f"<td>{round(v):,.0f}</td>" for v in v_d_dt])}
                     {fmt_diff(dod_dt)}
-                    {"".join([f"<td>{v:,.0f}</td>" for v in v_w_dt])}
+                    {"".join([f"<td>{round(v):,.0f}</td>" for v in v_w_dt])}
                     {fmt_diff(wow_dt)}
-                    <td>{m0_dt:,.0f}</td><td><b>{m1_dt:,.0f}</b></td>
+                    <td>{round(m0_dt):,.0f}</td><td><b>{round(m1_dt):,.0f}</b></td>
                     {fmt_diff(mom_dt)}
                 </tr>
                 {dt_rows_html}
@@ -576,9 +557,18 @@ def render(file_id=None):
                 var rows = document.getElementsByClassName(className);
                 var btn = document.getElementById(btnId);
                 if (!rows || rows.length === 0) return;
+                
                 var isHidden = rows[0].style.display === 'none';
                 for (var i = 0; i < rows.length; i++) {{
-                    rows[i].style.display = isHidden ? 'table-row' : 'none';
+                    if (isHidden) {{
+                        rows[i].style.display = 'table-row';
+                    }} else {{
+                        rows[i].style.display = 'none';
+                        var subBtns = rows[i].getElementsByClassName('toggle-btn');
+                        for (var j = 0; j < subBtns.length; j++) {{
+                            subBtns[j].innerText = '[+]';
+                        }}
+                    }}
                 }}
                 if (btn) btn.innerText = isHidden ? '[-]' : '[+]';
             }}
