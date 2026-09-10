@@ -76,7 +76,7 @@ def render(file_id: str):
     st.session_state.f_ld = [v for v in st.session_state.f_ld if v in ld_opts]
     st.session_state.f_tl = [v for v in st.session_state.f_tl if v in tl_opts]
 
-    # 3. HIỂN THỊ BỘ LỌC NGANG DẠNG MULTI-SELECT (Đổi tên thành "NGÀY")
+    # 3. HIỂN THỊ BỘ LỌC NGANG DẠNG MULTI-SELECT
     of1, of2, of3, of4, of5, of6, of7 = st.columns(7)
 
     with of1:
@@ -97,6 +97,14 @@ def render(file_id: str):
     # 4. TỔNG HỢP TRUY VẤN KPI THEO NGÀY PHÁT THỰC TẾ (tg_ptc)
     res_metrics_odr = con.execute(f"""
         SELECT 
+            -- Tổng sản lượng phát trong khoảng tg_ptc
+            COUNT(DISTINCT ma_phieugui) AS tong_sl_phat,
+
+            -- Sản lượng phát failed SLA (Giao không đúng giờ)
+            COUNT(DISTINCT CASE 
+                WHEN danh_gia_giao_hang = 'Giao không đúng giờ' THEN ma_phieugui 
+            END) AS sl_failed_sla,
+
             -- (2) Mẫu số: Tổng đơn PTC TT 501 trong kỳ phát
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' THEN ma_phieugui 
@@ -117,39 +125,34 @@ def render(file_id: str):
                 THEN ma_phieugui 
             END) AS sl_lan1_in_sla,
 
-            -- Đơn PTC chung trong kỳ
-            COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) AS sl_ptc,
-            
             -- Đơn PTC Lần 1 chung trong kỳ
-            COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1,
-
-            -- Tổng sản lượng phát trong khoảng tg_ptc
-            COUNT(DISTINCT ma_phieugui) AS tong_sl_phat
+            COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1
 
         FROM orders 
         WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
     """).fetchone()
 
-    mau_so_501 = res_metrics_odr[0] or 0          # (2) Mẫu số đơn PTC TT 501
-    tu_so_dung_gio = res_metrics_odr[1] or 0      # (1a) Tử số Đúng giờ
-    tu_so_lan1_dung_gio = res_metrics_odr[2] or 0 # (1b) Tử số Đúng giờ lần 1
-    sl_ptc = res_metrics_odr[3] or 0
-    sl_ptc1 = res_metrics_odr[4] or 0
-    tong_sl_phat = res_metrics_odr[5] or 0
+    tong_sl_phat = res_metrics_odr[0] or 0
+    sl_failed_sla = res_metrics_odr[1] or 0
+    mau_so_501 = res_metrics_odr[2] or 0          # (2) Mẫu số đơn PTC TT 501
+    tu_so_dung_gio = res_metrics_odr[3] or 0      # (1a) Tử số Đúng giờ
+    tu_so_lan1_dung_gio = res_metrics_odr[4] or 0 # (1b) Tử số Đúng giờ lần 1
+    sl_ptc1 = res_metrics_odr[5] or 0
 
     # Tính toán tỷ lệ %
-    pct_ptc = (sl_ptc / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
+    pct_failed_sla = (sl_failed_sla / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc_dung_gio = (tu_so_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
     pct_ptc1_dung_gio = (tu_so_lan1_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
 
+    # HIỂN THỊ 5 THẺ KPI
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
     with m_odr1: 
         st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHÁT</div><div class="metric-value">{tong_sl_phat:,.0f}</div><div class="metric-sub-green">▲ Thực tế</div></div>', unsafe_allow_html=True)
     with m_odr2: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC</div><div class="metric-value">{pct_ptc:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHÁT FAILED SLA</div><div class="metric-value">{sl_failed_sla:,.0f}</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
     with m_odr3: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC LẦN 1</div><div class="metric-value">{pct_ptc1:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT FAILED SLA</div><div class="metric-value">{pct_failed_sla:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
     with m_odr4: 
         st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC ĐÚNG GIỜ</div><div class="metric-value">{pct_ptc_dung_gio:.1f}%</div><div class="metric-sub-green">Theo ngày PTC</div></div>', unsafe_allow_html=True)
     with m_odr5: 
@@ -436,7 +439,7 @@ def render(file_id: str):
     for tinh, bc, sl in ton_tree_data:
         if tinh not in tinh_tree: tinh_tree[tinh] = {'sl': 0, 'bcs': {}}
         tinh_tree[tinh]['sl'] += sl
-        tinh_tree[tinh]['bcs'][bc] = sl
+        if tinh not in tinh_tree[tinh]['tinhs']: tinh_tree[tinh]['bcs'][bc] = sl
 
     base_style = """
     <style>
