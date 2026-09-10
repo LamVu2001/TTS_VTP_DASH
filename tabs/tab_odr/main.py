@@ -888,9 +888,9 @@ def render(file_id: str):
                 </tr>
             </thead>
             <tbody>
-                <!-- 1. SẢN LƯỢNG PHẢI PHÁT -->
+                <!-- 1. SẢN LƯỢNG PHÁT -->
                 <tr class="row-group" onclick="toggleRow('group_root', event, 'btn_root')">
-                    <td><span class="toggle-btn" id="btn_root">[+]</span> <b>Sản lượng phải phát</b></td>
+                    <td><span class="toggle-btn" id="btn_root">[+]</span> <b>Sản lượng phát</b></td>
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_d_phat])}
                     {fmt_diff(dod_p)}
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_w_phat])}
