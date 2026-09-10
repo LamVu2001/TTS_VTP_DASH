@@ -562,14 +562,13 @@ def render(file_id: str):
 
     st.divider()
 
-# 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX TRIỆT ĐỂ LỖI 0 NGÀY 0 TUẦN)
+# 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX CHỦN LỖI PTC_1 100%)
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
-        # 1. LẤY DỮ LIỆU CƠ BẢN VÀ MỐC THỜI GIAN THEO FILTER ĐANG CHỌN
         base_where = f"WHERE {where_sql_odr} AND tg_ptc IS NOT NULL" if where_sql_odr else "WHERE tg_ptc IS NOT NULL"
 
-        # Lấy 7 ngày gần nhất
+        # 1. LẤY MỐC THỜI GIAN
         days_df = con.execute(f"""
             SELECT 
                 STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as dt, 
@@ -581,7 +580,6 @@ def render(file_id: str):
         day_cols = days_df["dt"].tolist()[::-1] if days_df is not None and not days_df.empty else []
         day_labels = days_df["dt_label"].tolist()[::-1] if days_df is not None and not days_df.empty else []
 
-        # Lấy 5 tuần gần nhất
         weeks_df = con.execute(f"""
             SELECT 
                 STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as min_date,
@@ -593,7 +591,6 @@ def render(file_id: str):
         week_cols = weeks_df["min_date"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
         week_labels = weeks_df["week_label"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
 
-        # Lấy 2 tháng gần nhất (M-1 và M)
         months_df = con.execute(f"""
             SELECT DISTINCT STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key
             FROM orders {base_where}
@@ -604,13 +601,15 @@ def render(file_id: str):
         while len(month_cols) < 2:
             month_cols.insert(0, f"M_empty_{len(month_cols)}")
 
-        # 2. AGGREGATE BẢNG TỔNG
+        # 2. AGGREGATE BẢNG TỔNG (FIX ĐIỀU KIỆN PTC_1 ÉP KIỂU VARCHAR CHUẨN)
+        sql_ptc1_expr = "CAST(PTC_1 AS VARCHAR) IN ('1', '1.0', 'true', 'TRUE')"
+
         df_d = con.execute(f"""
             SELECT 
                 STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key,
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
-                ROUND(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 THEN ma_phieugui END), 0), 2) as ptc1,
+                ROUND(COUNT(DISTINCT CASE WHEN {sql_ptc1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as ptc1,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
             FROM orders {base_where}
@@ -622,7 +621,7 @@ def render(file_id: str):
                 STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key,
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
-                ROUND(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 THEN ma_phieugui END), 0), 2) as ptc1,
+                ROUND(COUNT(DISTINCT CASE WHEN {sql_ptc1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as ptc1,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
             FROM orders {base_where}
@@ -634,7 +633,7 @@ def render(file_id: str):
                 STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key,
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
-                ROUND(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 THEN ma_phieugui END), 0), 2) as ptc1,
+                ROUND(COUNT(DISTINCT CASE WHEN {sql_ptc1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as ptc1,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
             FROM orders {base_where}
@@ -860,7 +859,7 @@ def render(file_id: str):
         m0_next = v_m_next[0] if len(v_m_next) > 0 else 0
         m1_next = v_m_next[1] if len(v_m_next) > 1 else m0_next
 
-        # 4. RENDER BẢNG HTML TẢI MƯỢT TỨC THÌ
+        # 4. RENDER HTML
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
