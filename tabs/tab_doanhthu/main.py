@@ -27,7 +27,7 @@ def render(file_id=None):
     if "f_dt_ld" not in st.session_state: st.session_state.f_dt_ld = []
     if "f_dt_tl" not in st.session_state: st.session_state.f_dt_tl = []
 
-    # Hàm trợ giúp tạo mệnh đề SQL IN (...) an toàn chống SQL Injection
+    # Hàm trợ giúp tạo mệnh đề SQL IN (...) an toàn
     def sql_in_clause(column_name, selected_list):
         if not selected_list:
             return None
@@ -38,9 +38,12 @@ def render(file_id=None):
     # Hàm dựng câu lệnh WHERE cho Cross-Filtering Tab Doanh Thu
     def build_where_dt(exclude=None):
         conds = ["1=1"]
-        # Lọc theo clean_date của tab Doanh Thu
+        
+        # Sửa ép kiểu CAST AS DATE chuẩn xác giống Tab ODR
         if exclude != "date" and isinstance(st.session_state.f_dt_date, (list, tuple)) and len(st.session_state.f_dt_date) == 2:
-            conds.append(f"clean_date BETWEEN '{st.session_state.f_dt_date[0]}' AND '{st.session_state.f_dt_date[1]}'")
+            start_d = st.session_state.f_dt_date[0]
+            end_d = st.session_state.f_dt_date[1]
+            conds.append(f"CAST(clean_date AS DATE) BETWEEN '{start_d}' AND '{end_d}'")
         
         if exclude != "kh":
             c = sql_in_clause("ma_khgui", st.session_state.f_dt_kh)
@@ -54,7 +57,7 @@ def render(file_id=None):
             
         return " AND ".join(conds)
 
-    # MỆNH ĐỀ WHERE TOÀN CỤC CHO TAB DOANH THU
+    # MỆNH ĐỀ WHERE TOÀN CỤC LỌC DỮ LIỆU
     where_sql_dt = build_where_dt()
 
     # ---------------------------------------------------------
@@ -70,7 +73,7 @@ def render(file_id=None):
     st.session_state.f_dt_tl = [v for v in st.session_state.f_dt_tl if v in tl_opts]
 
     # ---------------------------------------------------------
-    # 3. HIỂN THỊ BỘ LỌC NGANG DÀN ĐỀU trên 4 CỘT
+    # 3. HIỂN THỊ BỘ LỌC NGANG DÀN ĐỀU 4 CỘT
     # ---------------------------------------------------------
     dtf1, dtf2, dtf3, dtf4 = st.columns(4)
 
@@ -83,11 +86,12 @@ def render(file_id=None):
     with dtf4:
         st.multiselect("TRỌNG LƯỢNG", tl_opts, key="f_dt_tl", placeholder="Tất cả")
 
+    st.markdown("<br>", unsafe_allow_html=True)
+
     # ---------------------------------------------------------
-    # 3. HIỂN THỊ METRICS TỔNG QUAN
+    # 4. HIỂN THỊ METRICS TỔNG QUAN
     # ---------------------------------------------------------
     try:
-        # Truy vấn tính Tổng doanh thu (tong_cuoc) và Tổng sản lượng (COUNT ma_phieugui)
         res_metrics = con.execute(f"""
             SELECT 
                 COALESCE(SUM(tong_cuoc), 0) / 1e9 AS tong_doanh_thu,
@@ -102,23 +106,19 @@ def render(file_id=None):
         st.error(f"Lỗi tính toán metrics: {e}")
         tong_dt, tong_sl = 0.0, 0
 
-    # Chia màn hình thành 2 cột hiển thị gọn gàng
     m1, m2 = st.columns(2)
 
     with m1:
         st.metric(
             label="TỔNG DOANH THU",
-            value=f"{tong_dt:,.2f} tỷ",
-            delta="Tổng cước thực tế"
+            value=f"{tong_dt:,.2f} tỷ"
         )
 
     with m2:
         st.metric(
             label="TỔNG SẢN LƯỢNG",
-            value=f"{tong_sl:,.0f}",
-            delta="Đơn thực tế"
+            value=f"{tong_sl:,.0f}"
         )
-
     
     c_chart, c_top = st.columns([2, 1.3])
     
