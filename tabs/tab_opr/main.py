@@ -1,6 +1,13 @@
 import streamlit as st
-from datetime import date
-from data_loader import get_connection  # Hoặc hàm load data tùy chỉnh của bạn
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import streamlit.components.v1 as components
+from datetime import datetime, date
+
+# Import trực tiếp file data_loader.py từ thư mục gốc
+from data_loader import get_connection
+
 
 def render(file_id: str):
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
