@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 from datetime import datetime, date
 
 # Import trực tiếp file data_loader.py từ thư mục gốc
-import data_loader
+from .data_loader import get_odr_db
 
 def render(file_id: str):
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
