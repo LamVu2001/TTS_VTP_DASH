@@ -1,7 +1,8 @@
 import streamlit as st
 from tabs.tab_odr.main import render as render_odr
+from tabs.tab_doanhthu.main import render as render_doanhthu
 
-st.set_page_config(page_title="Dashboard ODR", layout="wide")
+st.set_page_config(page_title="HealthScore Dashboard", layout="wide")
 
 # CSS Định dạng Metric Card
 st.markdown("""
@@ -22,10 +23,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Nhập ID Google Drive chứa file TTS_phat_data.parquet vào đây
+# ID File Data
 TTS_PHAT_FILE_ID = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"
+DOANHTHU_FILE_ID = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"  # Điền File ID của dữ liệu doanh thu nếu dùng riêng
 
-tab_odr, = st.tabs(["🚚 DASHBOARD ODR"])
+# Khai báo 2 tab
+tab_doanhthu, tab_odr = st.tabs(["💰 BÁO CÁO DOANH THU","🚚 DASHBOARD ODR"])
+
+with tab_doanhthu:
+    render_doanhthu(DOANHTHU_FILE_ID)
 
 with tab_odr:
     render_odr(TTS_PHAT_FILE_ID)
