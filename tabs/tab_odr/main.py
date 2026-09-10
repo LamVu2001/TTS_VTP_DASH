@@ -562,11 +562,11 @@ def render(file_id: str):
 
     st.divider()
 
-   # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH
+  # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
-        # --- 1. LẤY DANH SÁCH CỘT THỜI GIAN ĐỘNG (7 NGÀY, 5 TUẦN, THÁNG) ---
+        # --- 1. LẤY DANH SÁCH 7 NGÀY GẦN NHẤT ---
         days_info = con.execute(f"""
             SELECT 
                 CAST(tg_ptc AS DATE) as dt,
@@ -583,6 +583,7 @@ def render(file_id: str):
         else:
             day_cols, day_labels = [], ["--/--"] * 7
 
+        # --- 2. LẤY DANH SÁCH 5 TUẦN GẦN NHẤT ---
         weeks_info = con.execute(f"""
             SELECT 
                 'W' || STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%W') as week_label,
@@ -599,7 +600,7 @@ def render(file_id: str):
         else:
             week_cols, week_labels = [], ["W--"] * 5
 
-        # Query gom dữ liệu ma trận trực tiếp từ DuckDB
+        # --- 3. TRUY VẤN DỮ LIỆU TỔNG HỢP ---
         matrix_df = con.execute(f"""
             SELECT 
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
@@ -612,23 +613,33 @@ def render(file_id: str):
                 COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
                 COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) as sl_ptc1,
                 COUNT(DISTINCT CASE WHEN PTC_1 = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
-                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) as sl_inday,
-                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) as sl_nextday
+                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) as sl_inday,
+                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) as sl_nextday
             FROM orders
             WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
             GROUP BY 1, 2, 3, 4, 5, 6
         """).fetchdf()
 
-        # Hàm helper format class màu xanh/đỏ
+        # --- HÀM HELPER AN TOÀN TRÁNH INDEX ERROR ---
+        def safe_get(arr, idx, default=0):
+            try:
+                return arr[idx]
+            except IndexError:
+                return default
+
+        def safe_pct_diff(curr, prev):
+            if prev and prev > 0:
+                return ((curr - prev) / prev) * 100
+            return 0.0
+
         def fmt_diff(val, is_pct_point=False):
             color = "text-green" if val >= 0 else "text-red"
             sign = "+" if val >= 0 else ""
             unit = "%" if not is_pct_point else ""
             return f'<td class="{color}">{sign}{val:.2f}{unit}</td>'
 
-        # Helper tính toán danh sách giá trị theo danh mục
+        # Helper tính toán chỉ số cho từng Sub-dataframe
         def calc_row_metrics(df_sub):
-            # 7 ngày
             d_phat = [df_sub[df_sub["date_key"] == d]["sl_phat"].sum() for d in day_cols]
             d_dg = [df_sub[df_sub["date_key"] == d]["sl_dung_gio"].sum() for d in day_cols]
             d_p1 = [df_sub[df_sub["date_key"] == d]["sl_ptc1"].sum() for d in day_cols]
@@ -636,7 +647,6 @@ def render(file_id: str):
             d_in = [df_sub[df_sub["date_key"] == d]["sl_inday"].sum() for d in day_cols]
             d_next = [df_sub[df_sub["date_key"] == d]["sl_nextday"].sum() for d in day_cols]
 
-            # 5 tuần
             w_phat = [df_sub[df_sub["week_key"] == w]["sl_phat"].sum() for w in week_cols]
             w_dg = [df_sub[df_sub["week_key"] == w]["sl_dung_gio"].sum() for w in week_cols]
             w_p1 = [df_sub[df_sub["week_key"] == w]["sl_ptc1"].sum() for w in week_cols]
@@ -644,10 +654,9 @@ def render(file_id: str):
             w_in = [df_sub[df_sub["week_key"] == w]["sl_inday"].sum() for w in week_cols]
             w_next = [df_sub[df_sub["week_key"] == w]["sl_nextday"].sum() for w in week_cols]
 
-            # Tháng
-            m_list = sorted(df_sub["month_key"].dropna().unique().tolist(), reverse=True)
-            m_curr_k = m_list[0] if len(m_list) > 0 else ""
-            m_prev_k = m_list[1] if len(m_list) > 1 else m_curr_k
+            m_list = sorted([m for m in df_sub["month_key"].dropna().unique() if m], reverse=True)
+            m_curr_k = safe_get(m_list, 0, "")
+            m_prev_k = safe_get(m_list, 1, m_curr_k)
 
             m_curr_df = df_sub[df_sub["month_key"] == m_curr_k]
             m_prev_df = df_sub[df_sub["month_key"] == m_prev_k]
@@ -678,23 +687,23 @@ def render(file_id: str):
                 "m_nextday_p": (m_next_p/m_phat_p*100) if m_phat_p>0 else 0, "m_nextday_c": (m_next_c/m_phat_c*100) if m_phat_c>0 else 0,
             }
 
-        # Tính tổng dự án
         root_m = calc_row_metrics(matrix_df)
 
-        dod_phat = ((root_m["d_phat"][-1] - root_m["d_phat"][-2]) / root_m["d_phat"][-2] * 100) if len(root_m["d_phat"]) > 1 and root_m["d_phat"][-2] > 0 else 0
-        wow_phat = ((root_m["w_phat"][-1] - root_m["w_phat"][-2]) / root_m["w_phat"][-2] * 100) if len(root_m["w_phat"]) > 1 and root_m["w_phat"][-2] > 0 else 0
-        mom_phat = ((root_m["m_phat_c"] - root_m["m_phat_p"]) / root_m["m_phat_p"] * 100) if root_m["m_phat_p"] > 0 else 0
+        # Tính DoD/WoW/MoM an toàn
+        dod_phat = safe_pct_diff(safe_get(root_m["d_phat"], -1), safe_get(root_m["d_phat"], -2))
+        wow_phat = safe_pct_diff(safe_get(root_m["w_phat"], -1), safe_get(root_m["w_phat"], -2))
+        mom_phat = safe_pct_diff(root_m["m_phat_c"], root_m["m_phat_p"])
 
-        # --- XÂY DỰNG HTML NÚT CÂY ĐỐI TÁC -> TỈNH -> BƯU CỤC ---
+        # --- BUILD HTML CHO TỪNG NÚT CÂY (ĐỐI TÁC -> TỈNH -> BƯU CỤC) ---
         matrix_rows_html = ""
         for idx_dt, dt_name in enumerate(matrix_df["dt"].unique()):
             df_dt = matrix_df[matrix_df["dt"] == dt_name]
             dt_m = calc_row_metrics(df_dt)
             dt_clean_id = f"dt_{idx_dt}"
 
-            dod_dt = ((dt_m["d_phat"][-1] - dt_m["d_phat"][-2]) / dt_m["d_phat"][-2] * 100) if len(dt_m["d_phat"]) > 1 and dt_m["d_phat"][-2] > 0 else 0
-            wow_dt = ((dt_m["w_phat"][-1] - dt_m["w_phat"][-2]) / dt_m["w_phat"][-2] * 100) if len(dt_m["w_phat"]) > 1 and dt_m["w_phat"][-2] > 0 else 0
-            mom_dt = ((dt_m["m_phat_c"] - dt_m["m_phat_p"]) / dt_m["m_phat_p"] * 100) if dt_m["m_phat_p"] > 0 else 0
+            dod_dt = safe_pct_diff(safe_get(dt_m["d_phat"], -1), safe_get(dt_m["d_phat"], -2))
+            wow_dt = safe_pct_diff(safe_get(dt_m["w_phat"], -1), safe_get(dt_m["w_phat"], -2))
+            mom_dt = safe_pct_diff(dt_m["m_phat_c"], dt_m["m_phat_p"])
 
             matrix_rows_html += f"""
             <tr class="sub-row-1 group_root" style="display:none; background-color: #f4f6f8; font-weight:600;" onclick="toggleRow('{dt_clean_id}', event, 'btn_{dt_clean_id}')">
@@ -714,9 +723,9 @@ def render(file_id: str):
                 tinh_m = calc_row_metrics(df_tinh)
                 tinh_clean_id = f"{dt_clean_id}_tinh_{idx_tinh}"
 
-                dod_tinh = ((tinh_m["d_phat"][-1] - tinh_m["d_phat"][-2]) / tinh_m["d_phat"][-2] * 100) if len(tinh_m["d_phat"]) > 1 and tinh_m["d_phat"][-2] > 0 else 0
-                wow_tinh = ((tinh_m["w_phat"][-1] - tinh_m["w_phat"][-2]) / tinh_m["w_phat"][-2] * 100) if len(tinh_m["w_phat"]) > 1 and tinh_m["w_phat"][-2] > 0 else 0
-                mom_tinh = ((tinh_m["m_phat_c"] - tinh_m["m_phat_p"]) / tinh_m["m_phat_p"] * 100) if tinh_m["m_phat_p"] > 0 else 0
+                dod_tinh = safe_pct_diff(safe_get(tinh_m["d_phat"], -1), safe_get(tinh_m["d_phat"], -2))
+                wow_tinh = safe_pct_diff(safe_get(tinh_m["w_phat"], -1), safe_get(tinh_m["w_phat"], -2))
+                mom_tinh = safe_pct_diff(tinh_m["m_phat_c"], tinh_m["m_phat_p"])
 
                 matrix_rows_html += f"""
                 <tr class="sub-row-2 {dt_clean_id}" style="display:none; background-color: #ffffff; color: #1565c0;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
@@ -735,9 +744,9 @@ def render(file_id: str):
                     df_bc = df_tinh[df_tinh["bc"] == bc_name]
                     bc_m = calc_row_metrics(df_bc)
 
-                    dod_bc = ((bc_m["d_phat"][-1] - bc_m["d_phat"][-2]) / bc_m["d_phat"][-2] * 100) if len(bc_m["d_phat"]) > 1 and bc_m["d_phat"][-2] > 0 else 0
-                    wow_bc = ((bc_m["w_phat"][-1] - bc_m["w_phat"][-2]) / bc_m["w_phat"][-2] * 100) if len(bc_m["w_phat"]) > 1 and bc_m["w_phat"][-2] > 0 else 0
-                    mom_bc = ((bc_m["m_phat_c"] - bc_m["m_phat_p"]) / bc_m["m_phat_p"] * 100) if bc_m["m_phat_p"] > 0 else 0
+                    dod_bc = safe_pct_diff(safe_get(bc_m["d_phat"], -1), safe_get(bc_m["d_phat"], -2))
+                    wow_bc = safe_pct_diff(safe_get(bc_m["w_phat"], -1), safe_get(bc_m["w_phat"], -2))
+                    mom_bc = safe_pct_diff(bc_m["m_phat_c"], bc_m["m_phat_p"])
 
                     matrix_rows_html += f"""
                     <tr class="sub-row-3 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
@@ -752,27 +761,27 @@ def render(file_id: str):
                     </tr>
                     """
 
-        # Pad danh sách tiêu đề nếu thiếu
+        # Đảm bảo padding danh sách tiêu đề không bị trống
         while len(day_labels) < 7: day_labels.insert(0, "--/--")
         while len(week_labels) < 5: week_labels.insert(0, "W--")
 
-        dod_odr = root_m["d_odr"][-1] - root_m["d_odr"][-2] if len(root_m["d_odr"]) > 1 else 0
-        wow_odr = root_m["w_odr"][-1] - root_m["w_odr"][-2] if len(root_m["w_odr"]) > 1 else 0
+        dod_odr = safe_get(root_m["d_odr"], -1) - safe_get(root_m["d_odr"], -2)
+        wow_odr = safe_get(root_m["w_odr"], -1) - safe_get(root_m["w_odr"], -2)
         mom_odr = root_m["m_odr_c"] - root_m["m_odr_p"]
 
-        dod_ptc1 = root_m["d_ptc1"][-1] - root_m["d_ptc1"][-2] if len(root_m["d_ptc1"]) > 1 else 0
-        wow_ptc1 = root_m["w_ptc1"][-1] - root_m["w_ptc1"][-2] if len(root_m["w_ptc1"]) > 1 else 0
+        dod_ptc1 = safe_get(root_m["d_ptc1"], -1) - safe_get(root_m["d_ptc1"], -2)
+        wow_ptc1 = safe_get(root_m["w_ptc1"], -1) - safe_get(root_m["w_ptc1"], -2)
         mom_ptc1 = root_m["m_ptc1_c"] - root_m["m_ptc1_p"]
 
-        dod_in = root_m["d_inday"][-1] - root_m["d_inday"][-2] if len(root_m["d_inday"]) > 1 else 0
-        wow_in = root_m["w_inday"][-1] - root_m["w_inday"][-2] if len(root_m["w_inday"]) > 1 else 0
+        dod_in = safe_get(root_m["d_inday"], -1) - safe_get(root_m["d_inday"], -2)
+        wow_in = safe_get(root_m["w_inday"], -1) - safe_get(root_m["w_inday"], -2)
         mom_in = root_m["m_inday_c"] - root_m["m_inday_p"]
 
-        dod_next = root_m["d_nextday"][-1] - root_m["d_nextday"][-2] if len(root_m["d_nextday"]) > 1 else 0
-        wow_next = root_m["w_nextday"][-1] - root_m["w_nextday"][-2] if len(root_m["w_nextday"]) > 1 else 0
+        dod_next = safe_get(root_m["d_nextday"], -1) - safe_get(root_m["d_nextday"], -2)
+        wow_next = safe_get(root_m["w_nextday"], -1) - safe_get(root_m["w_nextday"], -2)
         mom_next = root_m["m_nextday_c"] - root_m["m_nextday_p"]
 
-        # --- 2. RENDER TABLE HTML ---
+        # --- 4. RENDER BẢNG HTML CHUẨN ĐẸP ---
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
