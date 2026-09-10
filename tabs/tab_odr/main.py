@@ -160,51 +160,66 @@ def render(file_id: str):
 
     st.write("")
     
-    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG CÓ CHỌN TIME VIEW (NGÀY / TUẦN / THÁNG)
+   # 5. BIỂU ĐỒ XU HƯỚNG SẢN LƯỢNG PHÁT THÀNH CÔNG
     c_odr_chart, c_odr_right = st.columns([2, 1.3])
     with c_odr_chart:
-        # Hàng chứa tiêu đề và nút chọn Time View
-        chart_head_1, chart_head_2 = st.columns([1.2, 1])
-        with chart_head_1:
+        # Tiêu đề và nút chọn Ngày / Tuần / Tháng nằm trên 2 cột song song
+        head_col1, head_col2 = st.columns([2.5, 1])
+        with head_col1:
             st.subheader("📈 XU HƯỚNG SẢN LƯỢNG PHÁT THÀNH CÔNG")
-        with chart_head_2:
-            time_view = st.radio(
-                "Chế độ xem:",
+        with head_col2:
+            view_mode = st.radio(
+                "Chế độ xem",
                 options=["Ngày", "Tuần", "Tháng"],
-                index=0,
                 horizontal=True,
-                key="chart_time_view",
+                key="odr_chart_view_mode",
                 label_visibility="collapsed"
             )
 
         try:
-            # Xác định biểu thức SQL nhóm thời gian theo Chế độ xem đã chọn
-            if time_view == "Tuần":
-                # Quy chuẩn Chủ Nhật -> Thứ 7 cho TikTok Shop
-                group_expr = "CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS VARCHAR)"
-                x_label = "Ngay_Dau_Tuan"
-            elif time_view == "Tháng":
-                group_expr = "STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m')"
-                x_label = "Thang"
+            chart_conds = ["PTC = 1", "clean_date_ptc IS NOT NULL"]
+            
+            # Áp dụng bộ lọc Cross-Filter
+            if st.session_state.get("f_tinh"):
+                chart_conds.append(sql_in_clause("tinh_phat", st.session_state.f_tinh))
+            if st.session_state.get("f_kh"):
+                chart_conds.append(sql_in_clause("ma_khgui", st.session_state.f_kh))
+            if st.session_state.get("f_bc"):
+                chart_conds.append(sql_in_clause("ma_buucuc_phat", st.session_state.f_bc))
+            if st.session_state.get("f_tuyen"):
+                chart_conds.append(sql_in_clause("tuyen", st.session_state.f_tuyen))
+            if st.session_state.get("f_ld"):
+                chart_conds.append(sql_in_clause("ma_dv_viettel", st.session_state.f_ld))
+            if st.session_state.get("f_tl"):
+                chart_conds.append(sql_in_clause("nhom_trong_luong", st.session_state.f_tl))
+            
+            if isinstance(st.session_state.f_date, (list, tuple)) and len(st.session_state.f_date) == 2:
+                chart_conds.append(f"clean_date_ptc BETWEEN '{st.session_state.f_date[0]}' AND '{st.session_state.f_date[1]}'")
+                
+            where_chart_sql = " AND ".join([c for c in chart_conds if c])
+
+            # Group theo Ngày / Tuần / Tháng dựa trên view_mode
+            if view_mode == "Tuần":
+                date_group_sql = "STRFTIME(clean_date_ptc, '%Y-W%W') as timeline"
+            elif view_mode == "Tháng":
+                date_group_sql = "STRFTIME(clean_date_ptc, '%Y-%m') as timeline"
             else:
-                # Mặc định theo Ngày
-                group_expr = "CAST(CAST(tg_ptc AS DATE) AS VARCHAR)"
-                x_label = "Ngay"
+                date_group_sql = "STRFTIME(clean_date_ptc, '%Y-%m-%d') as timeline"
 
             df_odr_daily = con.execute(f"""
                 SELECT 
-                    {group_expr} as {x_label}, 
-                    COUNT(DISTINCT ma_phieugui) as SanLuongPTC 
+                    {date_group_sql}, 
+                    COUNT(*) as SanLuongPTC 
                 FROM orders 
-                WHERE {where_sql_odr} AND PTC = 1 AND tg_ptc IS NOT NULL
-                GROUP BY 1
-                ORDER BY 1 ASC
+                WHERE {where_chart_sql}
+                GROUP BY timeline 
+                ORDER BY timeline ASC
             """).fetchdf()
 
             if len(df_odr_daily) > 0:
                 fig_odr = px.line(
                     df_odr_daily, 
-                    x=x_label, 
+                    x="timeline", 
                     y="SanLuongPTC", 
                     markers=True,
                     text="SanLuongPTC"
@@ -212,18 +227,24 @@ def render(file_id: str):
                 
                 fig_odr.update_traces(
                     line=dict(color="#c62828", width=2.5), 
-                    marker=dict(size=7, color="#c62828"),
-                    textposition="top center",
-                    textfont=dict(size=11, color="#111111")
+                    marker=dict(size=6, color="#c62828"),
+                    textposition="top center"
                 )
                 
                 fig_odr.update_layout(
                     height=380, 
-                    margin=dict(l=10, r=10, t=25, b=10),
+                    margin=dict(l=10, r=10, t=25, b=25), 
                     yaxis_title=None, 
-                    xaxis_title=None,
-                    xaxis=dict(type='category')
+                    xaxis_title=None
                 )
+                
+                # Ép xoay nhãn trục X nằm ngang (tickangle=0) và định dạng chuỗi
+                fig_odr.update_xaxes(
+                    type='category',
+                    tickangle=0,
+                    tickfont=dict(size=10)
+                )
+                
                 st.plotly_chart(fig_odr, use_container_width=True)
             else:
                 st.warning("Không có dữ liệu phát thành công trong khoảng thời gian đã chọn.")
@@ -232,7 +253,7 @@ def render(file_id: str):
 
     with c_odr_right:
         st.subheader("💡 THÔNG TIN TỔNG QUAN ODR")
-        st.info("Biểu đồ hỗ trợ chuyển đổi chế độ xem linh hoạt theo **Ngày**, **Tuần (Chủ Nhật - Thứ 7)**, hoặc **Tháng** dựa trên mốc thời gian phát thành công `tg_ptc`.")
+        st.info("Biểu đồ bên trái thể hiện sản lượng đơn phát thành công thực tế theo cột clean_date_ptc (ngay_phat_cuoi_cung) trong khoảng thời gian đã chọn.")
 
     st.divider()
 
