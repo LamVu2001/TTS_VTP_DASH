@@ -249,7 +249,7 @@ def render(file_id=None):
         df_bc = con.execute(f"""
             SELECT 
                 COALESCE(CAST(tinh_phat AS VARCHAR), 'Chưa xác định') AS tinh_phat,
-                COALESCE(CAST(buu_cuc_phat AS VARCHAR), 'Chưa xác định') AS buu_cuc_phat,
+                COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chưa xác định') AS buu_cuc_phat,
                 COUNT(ma_phieugui) AS san_luong,
                 COALESCE(SUM(tong_cuoc), 0) AS doanh_thu
             FROM orders
