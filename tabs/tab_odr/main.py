@@ -562,66 +562,70 @@ def render(file_id: str):
 
     st.divider()
 
- # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX TRIỆT ĐỂ LỆCH VÀ TRÙNG CỘT THÁNG)
+# 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX TRIỆT ĐỂ LỖI 0 NGÀY 0 TUẦN)
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
-        # 1. LẤY MỐC THỜI GIAN NGÀY / TUẦN / THÁNG CHUẨN
+        # 1. LẤY DỮ LIỆU CƠ BẢN VÀ MỐC THỜI GIAN THEO FILTER ĐANG CHỌN
+        base_where = f"WHERE {where_sql_odr} AND tg_ptc IS NOT NULL" if where_sql_odr else "WHERE tg_ptc IS NOT NULL"
+
+        # Lấy 7 ngày gần nhất
         days_df = con.execute(f"""
             SELECT 
-                CAST(CAST(tg_ptc AS DATE) AS VARCHAR) as dt, 
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as dt, 
                 STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
+            FROM orders {base_where}
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 7
         """).fetchdf()
 
         day_cols = days_df["dt"].tolist()[::-1] if days_df is not None and not days_df.empty else []
         day_labels = days_df["dt_label"].tolist()[::-1] if days_df is not None and not days_df.empty else []
 
+        # Lấy 5 tuần gần nhất
         weeks_df = con.execute(f"""
             SELECT 
-                CAST(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE) AS VARCHAR) as min_date,
+                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as min_date,
                 'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%W') as week_label
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
+            FROM orders {base_where}
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 5
         """).fetchdf()
 
         week_cols = weeks_df["min_date"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
         week_labels = weeks_df["week_label"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
 
-        # Lấy 2 mốc tháng gần nhất (M-1 và M)
+        # Lấy 2 tháng gần nhất (M-1 và M)
         months_df = con.execute(f"""
             SELECT DISTINCT STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
+            FROM orders {base_where}
             ORDER BY 1 DESC LIMIT 2
         """).fetchdf()
 
         month_cols = months_df["m_key"].tolist()[::-1] if months_df is not None and not months_df.empty else []
         while len(month_cols) < 2:
-            month_cols.insert(0, f"M_empty_{len(month_cols)}")  # Tránh lỗi thiếu phần tử
+            month_cols.insert(0, f"M_empty_{len(month_cols)}")
 
         # 2. AGGREGATE BẢNG TỔNG
         df_d = con.execute(f"""
             SELECT 
-                CAST(CAST(tg_ptc AS DATE) AS VARCHAR) as d_key,
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key,
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
                 ROUND(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 THEN ma_phieugui END), 0), 2) as ptc1,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            FROM orders {base_where}
             GROUP BY 1
         """).fetchdf()
 
         df_w = con.execute(f"""
             SELECT 
-                CAST(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE) AS VARCHAR) as w_key,
+                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key,
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
                 ROUND(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 THEN ma_phieugui END), 0), 2) as ptc1,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            FROM orders {base_where}
             GROUP BY 1
         """).fetchdf()
 
@@ -633,7 +637,7 @@ def render(file_id: str):
                 ROUND(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN COALESCE(PTC_1, 0) = 1 THEN ma_phieugui END), 0), 2) as ptc1,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            FROM orders {base_where}
             GROUP BY 1
         """).fetchdf()
 
@@ -660,7 +664,6 @@ def render(file_id: str):
         v_w_in   = [get_v_fast(dict_w, w, 5) for w in week_cols]
         v_w_next = [get_v_fast(dict_w, w, 6) for w in week_cols]
 
-        # Khóa giá trị tháng M-1 và M chính xác
         v_m_phat = [get_v_fast(dict_m, m, 2) for m in month_cols]
         v_m_odr  = [get_v_fast(dict_m, m, 3) for m in month_cols]
         v_m_ptc1 = [get_v_fast(dict_m, m, 4) for m in month_cols]
@@ -675,33 +678,33 @@ def render(file_id: str):
 
         dod_p = ((v_d_phat[-1] - v_d_phat[-2])/v_d_phat[-2]*100) if len(v_d_phat)>1 and v_d_phat[-2]>0 else 0
         wow_p = ((v_w_phat[-1] - v_w_phat[-2])/v_w_phat[-2]*100) if len(v_w_phat)>1 and v_w_phat[-2]>0 else 0
-        mom_p = ((v_m_phat[1] - v_m_phat[0])/v_m_phat[0]*100) if v_m_phat[0]>0 else 0
+        mom_p = ((v_m_phat[1] - v_m_phat[0])/v_m_phat[0]*100) if len(v_m_phat)>1 and v_m_phat[0]>0 else 0
 
         dod_odr = v_d_odr[-1] - v_d_odr[-2] if len(v_d_odr)>1 else 0
         wow_odr = v_w_odr[-1] - v_w_odr[-2] if len(v_w_odr)>1 else 0
-        mom_odr = v_m_odr[1] - v_m_odr[0]
+        mom_odr = (v_m_odr[1] - v_m_odr[0]) if len(v_m_odr)>1 else 0
 
         dod_ptc1 = v_d_ptc1[-1] - v_d_ptc1[-2] if len(v_d_ptc1)>1 else 0
         wow_ptc1 = v_w_ptc1[-1] - v_w_ptc1[-2] if len(v_w_ptc1)>1 else 0
-        mom_ptc1 = v_m_ptc1[1] - v_m_ptc1[0]
+        mom_ptc1 = (v_m_ptc1[1] - v_m_ptc1[0]) if len(v_m_ptc1)>1 else 0
 
         dod_in = v_d_in[-1] - v_d_in[-2] if len(v_d_in)>1 else 0
         wow_in = v_w_in[-1] - v_w_in[-2] if len(v_w_in)>1 else 0
-        mom_in = v_m_in[1] - v_m_in[0]
+        mom_in = (v_m_in[1] - v_m_in[0]) if len(v_m_in)>1 else 0
 
         dod_next = v_d_next[-1] - v_d_next[-2] if len(v_d_next)>1 else 0
         wow_next = v_w_next[-1] - v_w_next[-2] if len(v_w_next)>1 else 0
-        mom_next = v_m_next[1] - v_m_next[0]
+        mom_next = (v_m_next[1] - v_m_next[0]) if len(v_m_next)>1 else 0
 
-        # 3. TRUY VẤN CÂY DỮ LIỆU ĐỐI TÁC / TỈNH / BƯU CỤC (BAO GỒM NGÀY & TUẦN & THÁNG)
+        # 3. TRUY VẤN CÂY DỮ LIỆU ĐỐI TÁC / TỈNH / BƯU CỤC
         tree_day_df = con.execute(f"""
             SELECT 
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
                 COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
                 COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc,
-                CAST(CAST(tg_ptc AS DATE) AS VARCHAR) as d_key,
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key,
                 COUNT(DISTINCT ma_phieugui) as sl
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            FROM orders {base_where}
             GROUP BY 1, 2, 3, 4
         """).fetchdf()
 
@@ -710,9 +713,9 @@ def render(file_id: str):
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
                 COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
                 COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc,
-                CAST(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE) AS VARCHAR) as w_key,
+                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key,
                 COUNT(DISTINCT ma_phieugui) as sl
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            FROM orders {base_where}
             GROUP BY 1, 2, 3, 4
         """).fetchdf()
 
@@ -723,7 +726,7 @@ def render(file_id: str):
                 COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc,
                 STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key,
                 COUNT(DISTINCT ma_phieugui) as sl
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            FROM orders {base_where}
             GROUP BY 1, 2, 3, 4
         """).fetchdf()
 
@@ -753,7 +756,7 @@ def render(file_id: str):
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
                 COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
                 COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc
-            FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            FROM orders {base_where}
             ORDER BY 1, 2, 3
         """).fetchdf()
 
@@ -776,15 +779,18 @@ def render(file_id: str):
             
             dod_dt = ((d_vals_dt[-1] - d_vals_dt[-2])/d_vals_dt[-2]*100) if len(d_vals_dt)>1 and d_vals_dt[-2]>0 else 0
             wow_dt = ((w_vals_dt[-1] - w_vals_dt[-2])/w_vals_dt[-2]*100) if len(w_vals_dt)>1 and w_vals_dt[-2]>0 else 0
-            mom_dt = ((m_vals_dt[1] - m_vals_dt[0])/m_vals_dt[0]*100) if m_vals_dt[0]>0 else 0
+            mom_dt = ((m_vals_dt[1] - m_vals_dt[0])/m_vals_dt[0]*100) if len(m_vals_dt)>1 and m_vals_dt[0]>0 else 0
 
             d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_dt])
             w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_dt])
 
+            m0_val = m_vals_dt[0] if len(m_vals_dt) > 0 else 0
+            m1_val = m_vals_dt[1] if len(m_vals_dt) > 1 else m0_val
+
             matrix_rows_list.append(f"""
             <tr class="sub-row-1 group_root" style="display:none; background-color: #f4f6f8; font-weight:600;" onclick="toggleRow('{dt_clean_id}', event, 'btn_{dt_clean_id}')">
                 <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{dt_clean_id}">[+]</span> Đối tác: <b>{dt_name}</b></td>
-                {d_cells}{fmt_diff(dod_dt)}{w_cells}{fmt_diff(wow_dt)}<td>{m_vals_dt[0]:,.0f}</td><td><b>{m_vals_dt[1]:,.0f}</b></td>{fmt_diff(mom_dt)}
+                {d_cells}{fmt_diff(dod_dt)}{w_cells}{fmt_diff(wow_dt)}<td>{m0_val:,.0f}</td><td><b>{m1_val:,.0f}</b></td>{fmt_diff(mom_dt)}
             </tr>
             """)
 
@@ -797,15 +803,18 @@ def render(file_id: str):
                 
                 dod_tinh = ((d_vals_tinh[-1] - d_vals_tinh[-2])/d_vals_tinh[-2]*100) if len(d_vals_tinh)>1 and d_vals_tinh[-2]>0 else 0
                 wow_tinh = ((w_vals_tinh[-1] - w_vals_tinh[-2])/w_vals_tinh[-2]*100) if len(w_vals_tinh)>1 and w_vals_tinh[-2]>0 else 0
-                mom_tinh = ((m_vals_tinh[1] - m_vals_tinh[0])/m_vals_tinh[0]*100) if m_vals_tinh[0]>0 else 0
+                mom_tinh = ((m_vals_tinh[1] - m_vals_tinh[0])/m_vals_tinh[0]*100) if len(m_vals_tinh)>1 and m_vals_tinh[0]>0 else 0
 
                 t_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_tinh])
                 t_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_tinh])
 
+                tm0_val = m_vals_tinh[0] if len(m_vals_tinh) > 0 else 0
+                tm1_val = m_vals_tinh[1] if len(m_vals_tinh) > 1 else tm0_val
+
                 matrix_rows_list.append(f"""
                 <tr class="sub-row-2 {dt_clean_id}" style="display:none; background-color: #ffffff; color: #1565c0;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
                     <td style="padding-left: 40px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Tỉnh: <b>{tinh_name}</b></td>
-                    {t_d_cells}{fmt_diff(dod_tinh)}{t_w_cells}{fmt_diff(wow_tinh)}<td>{m_vals_tinh[0]:,.0f}</td><td><b>{m_vals_tinh[1]:,.0f}</b></td>{fmt_diff(mom_tinh)}
+                    {t_d_cells}{fmt_diff(dod_tinh)}{t_w_cells}{fmt_diff(wow_tinh)}<td>{tm0_val:,.0f}</td><td><b>{tm1_val:,.0f}</b></td>{fmt_diff(mom_tinh)}
                 </tr>
                 """)
 
@@ -816,15 +825,18 @@ def render(file_id: str):
                     
                     dod_bc = ((d_vals_bc[-1] - d_vals_bc[-2])/d_vals_bc[-2]*100) if len(d_vals_bc)>1 and d_vals_bc[-2]>0 else 0
                     wow_bc = ((w_vals_bc[-1] - w_vals_bc[-2])/w_vals_bc[-2]*100) if len(w_vals_bc)>1 and w_vals_bc[-2]>0 else 0
-                    mom_bc = ((m_vals_bc[1] - m_vals_bc[0])/m_vals_bc[0]*100) if m_vals_bc[0]>0 else 0
+                    mom_bc = ((m_vals_bc[1] - m_vals_bc[0])/m_vals_bc[0]*100) if len(m_vals_bc)>1 and m_vals_bc[0]>0 else 0
 
                     b_d_cells = "".join([f"<td>{v:,.0f}</td>" for v in d_vals_bc])
                     b_w_cells = "".join([f"<td>{v:,.0f}</td>" for v in w_vals_bc])
 
+                    bm0_val = m_vals_bc[0] if len(m_vals_bc) > 0 else 0
+                    bm1_val = m_vals_bc[1] if len(m_vals_bc) > 1 else bm0_val
+
                     matrix_rows_list.append(f"""
                     <tr class="sub-row-3 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
                         <td style="padding-left: 60px;">• Bưu cục: <b>{bc_name}</b></td>
-                        {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{m_vals_bc[0]:,.0f}</td><td><b>{m_vals_bc[1]:,.0f}</b></td>{fmt_diff(mom_bc)}
+                        {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{bm0_val:,.0f}</td><td><b>{bm1_val:,.0f}</b></td>{fmt_diff(mom_bc)}
                     </tr>
                     """)
 
@@ -833,7 +845,22 @@ def render(file_id: str):
         n_day_cols = len(day_labels)
         n_week_cols = len(week_labels)
 
-        # 4. RENDER BẢNG HTML CHUẨN SỐ THÁNG & TUẦN 100%
+        m0_tot = v_m_phat[0] if len(v_m_phat) > 0 else 0
+        m1_tot = v_m_phat[1] if len(v_m_phat) > 1 else m0_tot
+
+        m0_odr = v_m_odr[0] if len(v_m_odr) > 0 else 0
+        m1_odr = v_m_odr[1] if len(v_m_odr) > 1 else m0_odr
+
+        m0_ptc1 = v_m_ptc1[0] if len(v_m_ptc1) > 0 else 0
+        m1_ptc1 = v_m_ptc1[1] if len(v_m_ptc1) > 1 else m0_ptc1
+
+        m0_in = v_m_in[0] if len(v_m_in) > 0 else 0
+        m1_in = v_m_in[1] if len(v_m_in) > 1 else m0_in
+
+        m0_next = v_m_next[0] if len(v_m_next) > 0 else 0
+        m1_next = v_m_next[1] if len(v_m_next) > 1 else m0_next
+
+        # 4. RENDER BẢNG HTML TẢI MƯỢT TỨC THÌ
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
@@ -868,7 +895,7 @@ def render(file_id: str):
                     {fmt_diff(dod_p)}
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_w_phat])}
                     {fmt_diff(wow_p)}
-                    <td>{v_m_phat[0]:,.0f}</td><td><b>{v_m_phat[1]:,.0f}</b></td>
+                    <td>{m0_tot:,.0f}</td><td><b>{m1_tot:,.0f}</b></td>
                     {fmt_diff(mom_p)}
                 </tr>
 
@@ -881,7 +908,7 @@ def render(file_id: str):
                     {fmt_diff(dod_odr, is_pct=True)}
                     {"".join([f"<td>{v:.2f}</td>" for v in v_w_odr])}
                     {fmt_diff(wow_odr, is_pct=True)}
-                    <td>{v_m_odr[0]:.2f}</td><td><b>{v_m_odr[1]:.2f}</b></td>
+                    <td>{m0_odr:.2f}</td><td><b>{m1_odr:.2f}</b></td>
                     {fmt_diff(mom_odr, is_pct=True)}
                 </tr>
 
@@ -892,7 +919,7 @@ def render(file_id: str):
                     {fmt_diff(dod_ptc1, is_pct=True)}
                     {"".join([f"<td>{v:.2f}</td>" for v in v_w_ptc1])}
                     {fmt_diff(wow_ptc1, is_pct=True)}
-                    <td>{v_m_ptc1[0]:.2f}</td><td><b>{v_m_ptc1[1]:.2f}</b></td>
+                    <td>{m0_ptc1:.2f}</td><td><b>{m1_ptc1:.2f}</b></td>
                     {fmt_diff(mom_ptc1, is_pct=True)}
                 </tr>
 
@@ -903,7 +930,7 @@ def render(file_id: str):
                     {fmt_diff(dod_in, is_pct=True)}
                     {"".join([f"<td>{v:.2f}</td>" for v in v_w_in])}
                     {fmt_diff(wow_in, is_pct=True)}
-                    <td>{v_m_in[0]:.2f}</td><td><b>{v_m_in[1]:.2f}</b></td>
+                    <td>{m0_in:.2f}</td><td><b>{m1_in:.2f}</b></td>
                     {fmt_diff(mom_in, is_pct=True)}
                 </tr>
 
@@ -914,7 +941,7 @@ def render(file_id: str):
                     {fmt_diff(dod_next, is_pct=True)}
                     {"".join([f"<td>{v:.2f}</td>" for v in v_w_next])}
                     {fmt_diff(wow_next, is_pct=True)}
-                    <td>{v_m_next[0]:.2f}</td><td><b>{v_m_next[1]:.2f}</b></td>
+                    <td>{m0_next:.2f}</td><td><b>{m1_next:.2f}</b></td>
                     {fmt_diff(mom_next, is_pct=True)}
                 </tr>
             </tbody>
