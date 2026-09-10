@@ -3,11 +3,17 @@ import streamlit.components.v1 as components
 import plotly.express as px
 import pandas as pd
 
-# Import hàm get_connection an toàn
+# ---------------------------------------------------------
+# XỬ LÝ IMPORT AN TOÀN ĐỂ TRÁNH ModuleNotFoundError
+# ---------------------------------------------------------
 try:
     from tabs.tab_odr.data_loader import get_connection
-except ImportError:
-    from tab_odr.data_loader import get_connection
+except ModuleNotFoundError:
+    try:
+        from tab_odr.data_loader import get_connection
+    except ModuleNotFoundError:
+        from ..tab_odr.data_loader import get_connection
+
 
 def render(file_id=None):
     # Lấy kết nối DuckDB dùng chung từ tab_odr
@@ -18,7 +24,7 @@ def render(file_id=None):
         return
 
     # ---------------------------------------------------------
-    # 1. KHỞI TẠO DỮ LIỆU BỘ LỌC
+    # 1. KHỞI TẠO DỮ LIỆU BỘ LỌC FOR TAB DOANH THU
     # ---------------------------------------------------------
     def get_options(query):
         try:
