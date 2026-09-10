@@ -4,19 +4,13 @@ import plotly.express as px
 import pandas as pd
 
 # ---------------------------------------------------------
-# XỬ LÝ IMPORT AN TOÀN ĐỂ TRÁNH ModuleNotFoundError
+# IMPORT TRỰC TIẾP TỪ DATA_LOADER Ở THƯ MỤC GỐC
 # ---------------------------------------------------------
-try:
-    from tabs.tab_odr.data_loader import get_connection
-except ModuleNotFoundError:
-    try:
-        from tab_odr.data_loader import get_connection
-    except ModuleNotFoundError:
-        from ..tab_odr.data_loader import get_connection
+from data_loader import get_connection
 
 
 def render(file_id=None):
-    # Lấy kết nối DuckDB dùng chung từ tab_odr
+    # Lấy kết nối DuckDB dùng chung
     try:
         con = get_connection(file_id)
     except Exception as e:
