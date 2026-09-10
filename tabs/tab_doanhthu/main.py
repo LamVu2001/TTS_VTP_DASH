@@ -237,8 +237,8 @@ def render(file_id=None):
         except Exception as e:
             st.error(f"Lỗi truy vấn Top khách hàng: {e}")
     st.divider()
-   # ---------------------------------------------------------
-    # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (OPTIMIZED & AUTO-ROUND)
+    # ---------------------------------------------------------
+    # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (LÀM TRÒN DT & FIX BUNG CÂY)
     # ---------------------------------------------------------
     st.subheader("BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG")
 
@@ -338,7 +338,7 @@ def render(file_id=None):
         wow_dt = ((v_w_dt[-1] - v_w_dt[-2])/v_w_dt[-2]*100) if len(v_w_dt)>1 and v_w_dt[-2]>0 else 0
         mom_dt = ((v_m_dt[1] - v_m_dt[0])/v_m_dt[0]*100) if len(v_m_dt)>1 and v_m_dt[0]>0 else 0
 
-        # 3. TRUY VẤN CHI TIẾT (TỐI ƯU CÂY DỮ LIỆU)
+        # 3. TRUY VẤN CHI TIẾT
         kh_day_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
         kh_week_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
         kh_month_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
@@ -347,7 +347,6 @@ def render(file_id=None):
         tree_week_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
         tree_month_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
 
-        # Build Maps
         map_kh_d_sl, map_kh_w_sl, map_kh_m_sl = {}, {}, {}
         map_kh_d_dt, map_kh_w_dt, map_kh_m_dt = {}, {}, {}
         
@@ -398,7 +397,7 @@ def render(file_id=None):
             for r in tinh_bc_df.itertuples():
                 tinh_hierarchy[str(r.tinh)].append(str(r.bc))
 
-        # Helper render cây đa cấp (Hỗ trợ 3 cấp bấm mở + Làm tròn số doanh thu)
+        # Helper render cây đa cấp (Fix lỗi bung bưu cục + Làm tròn doanh thu)
         def generate_tree_rows(prefix, map_kh_d, map_kh_w, map_kh_m, map_tinh_d, map_bc_d, map_tinh_w, map_bc_w, map_tinh_m, map_bc_m, is_currency=False):
             rows = []
             def fmt_val(v): return f"{round(v):,.0f}" if is_currency else f"{v:,.0f}"
@@ -477,8 +476,9 @@ def render(file_id=None):
                         bm0 = m_vals_bc[0] if len(m_vals_bc) > 0 else 0
                         bm1 = m_vals_bc[1] if len(m_vals_bc) > 1 else bm0
 
+                        # SỬA TẠI ĐÂY: Xóa tinh_header_id để Bưu cục không bị bung cùng lúc với Tỉnh
                         rows.append(f"""
-                        <tr class="sub-row-3 {tinh_header_id} {tinh_clean_id}" style="display:none; color: #555;">
+                        <tr class="sub-row-3 {tinh_clean_id}" style="display:none; color: #555;">
                             <td style="padding-left: 55px;">- Bưu cục: {bc_name}</td>
                             {b_d_cells}{fmt_diff(dod_bc)}{b_w_cells}{fmt_diff(wow_bc)}<td>{fmt_val(bm0)}</td><td><b>{fmt_val(bm1)}</b></td>{fmt_diff(mom_bc)}
                         </tr>
@@ -552,6 +552,7 @@ def render(file_id=None):
         </table>
 
         <script>
+            // SỬA TẠI ĐÂY: JS ẩn dây chuyên sâu, khi đóng cấp trên sẽ ẩn toàn bộ cấp dưới
             function toggleRow(className, event, btnId) {{
                 if (event) event.stopPropagation();
                 var rows = document.getElementsByClassName(className);
@@ -580,6 +581,5 @@ def render(file_id=None):
         st.error(f"Lỗi tính toán Ma trận Doanh thu & Sản lượng: {e}")
 
     st.divider()
-
 
     
