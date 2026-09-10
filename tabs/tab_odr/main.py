@@ -161,155 +161,155 @@ def render(file_id: str):
     st.write("")
     
    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG VÀ TỶ LỆ ODR
-c_odr_chart, c_odr_right = st.columns([2, 1.3])
-with c_odr_chart:
-    # 1. TIÊU ĐỀ
-    st.subheader("📈 XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ ODR")
+    c_odr_chart, c_odr_right = st.columns([2, 1.3])
+    with c_odr_chart:
+        # 1. TIÊU ĐỀ
+        st.subheader("📈 XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ ODR")
+        
+        # 2. BỘ LỌC ĐẶT NGAY DƯỚI TIÊU ĐỀ
+        time_view = st.radio(
+            "Chế độ xem:",
+            options=["Ngày", "Tuần", "Tháng"],
+            index=0,
+            horizontal=True,
+            key="chart_time_view",
+            label_visibility="collapsed"
+        )
     
-    # 2. BỘ LỌC ĐẶT NGAY DƯỚI TIÊU ĐỀ
-    time_view = st.radio(
-        "Chế độ xem:",
-        options=["Ngày", "Tuần", "Tháng"],
-        index=0,
-        horizontal=True,
-        key="chart_time_view",
-        label_visibility="collapsed"
-    )
-
-    try:
-        # Xử lý SQL tách nhóm Ngày/Tuần/Tháng & Format nhãn không chứa giờ
-        if time_view == "Tuần":
-            # Quy chuẩn Chủ Nhật -> Thứ 7 cho TikTok Shop
-            date_expr = "CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)"
-            date_format = "%d/%m/%Y"
-        elif time_view == "Tháng":
-            date_expr = "DATE_TRUNC('month', CAST(tg_ptc AS DATE))"
-            date_format = "%m/%Y"
-        else:
-            date_expr = "CAST(tg_ptc AS DATE)"
-            date_format = "%d/%m/%Y"
-
-        df_odr_daily = con.execute(f"""
-            SELECT 
-                STRFTIME({date_expr}, '{date_format}') as time_label, 
-                COUNT(DISTINCT ma_phieugui) as tong_sl_phat,
-                COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
-                ROUND(COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 1) as ty_le_odr,
-                MIN({date_expr}) as sort_key
-            FROM orders 
-            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
-            GROUP BY 1
-            ORDER BY sort_key ASC
-        """).fetchdf()
-
-        if len(df_odr_daily) > 0:
-            # Tạo biểu đồ 2 trục Y (Dual-Axis)
-            fig_odr = make_subplots(specs=[[{"secondary_y": True}]])
-
-            # 1. Line Sản lượng phát thành công (Trục trái - Đỏ)
-            fig_odr.add_trace(
-                go.Scatter(
-                    x=df_odr_daily["time_label"],
-                    y=df_odr_daily["sl_ptc"],
-                    name="Sản lượng PTC",
-                    mode="lines+markers+text",
-                    text=df_odr_daily["sl_ptc"].apply(lambda x: f"{x:,.0f}"),
-                    textposition="top center",
-                    textfont=dict(size=10, color="#c62828"),
-                    line=dict(color="#c62828", width=2.5),
-                    marker=dict(size=6, color="#c62828")
-                ),
-                secondary_y=False
-            )
-
-            # 2. Line Tỷ lệ ODR % (Trục phải - Xanh lá)
-            fig_odr.add_trace(
-                go.Scatter(
-                    x=df_odr_daily["time_label"],
-                    y=df_odr_daily["ty_le_odr"],
-                    name="Tỷ lệ ODR (%)",
-                    mode="lines+markers+text",
-                    text=df_odr_daily["ty_le_odr"].apply(lambda x: f"{x:.1f}%"),
-                    textposition="bottom center",
-                    textfont=dict(size=10, color="#2e7d32"),
-                    line=dict(color="#2e7d32", width=2, dash="dot"),
-                    marker=dict(size=6, color="#2e7d32")
-                ),
-                secondary_y=True
-            )
-
-            fig_odr.update_layout(
-                height=390, 
-                margin=dict(l=10, r=10, t=25, b=10),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                xaxis=dict(type='category', title=None)
-            )
-
-            fig_odr.update_yaxes(title_text="Sản lượng phát", secondary_y=False, showgrid=True)
-            fig_odr.update_yaxes(title_text="Tỷ lệ ODR (%)", secondary_y=True, showgrid=False, range=[0, 110])
-
-            st.plotly_chart(fig_odr, use_container_width=True)
-        else:
-            st.warning("Không có dữ liệu phát thành công trong khoảng thời gian đã chọn.")
-    except Exception as e:
-        st.error(f"Lỗi tính toán biểu đồ: {e}")
-
-    with c_odr_right:
-        st.subheader("📊 TỶ TRỌNG CÁC KHÂU SAI (%)")
         try:
-            # Truy vấn đếm số lượng đơn Failed SLA theo từng Khâu sai
-            df_khau_sai = con.execute(f"""
-                WITH failed_orders AS (
-                    SELECT 
-                        COALESCE(CAST(KHAU_SAI AS VARCHAR), 'Chưa xác định') as khau_sai,
-                        COUNT(DISTINCT ma_phieugui) as sl_failed
-                    FROM orders
-                    WHERE {where_sql_odr} 
-                      AND tg_ptc IS NOT NULL
-                      AND danh_gia_giao_hang = 'Giao không đúng giờ'
-                    GROUP BY 1
-                ),
-                total_failed AS (
-                    SELECT SUM(sl_failed) as total_sl FROM failed_orders
-                )
-                SELECT 
-                    f.khau_sai,
-                    f.sl_failed,
-                    ROUND(f.sl_failed * 100.0 / NULLIF(t.total_sl, 0), 2) as ty_le_pct
-                FROM failed_orders f, total_failed t
-                WHERE f.khau_sai IS NOT NULL AND f.khau_sai != ''
-                ORDER BY f.sl_failed ASC
-            """).fetchdf()
-
-            if len(df_khau_sai) > 0:
-                fig_khau_sai = px.bar(
-                    df_khau_sai,
-                    x="ty_le_pct",
-                    y="khau_sai",
-                    orientation="h",
-                    text=df_khau_sai["ty_le_pct"].apply(lambda x: f"{x:.2f}%")
-                )
-
-                fig_khau_sai.update_traces(
-                    marker_color="#c62828",  # Màu đỏ thương hiệu
-                    textposition="outside",
-                    textfont=dict(size=11, color="#111111", weight="bold")
-                )
-
-                fig_khau_sai.update_layout(
-                    height=390,
-                    margin=dict(l=10, r=45, t=10, b=10),
-                    xaxis_title=None,
-                    yaxis_title=None,
-                    xaxis=dict(showgrid=False, showticklabels=False, range=[0, max(df_khau_sai["ty_le_pct"]) * 1.25]),
-                    yaxis=dict(showgrid=False, tickfont=dict(size=12, color="#111111"))
-                )
-
-                st.plotly_chart(fig_khau_sai, use_container_width=True)
+            # Xử lý SQL tách nhóm Ngày/Tuần/Tháng & Format nhãn không chứa giờ
+            if time_view == "Tuần":
+                # Quy chuẩn Chủ Nhật -> Thứ 7 cho TikTok Shop
+                date_expr = "CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)"
+                date_format = "%d/%m/%Y"
+            elif time_view == "Tháng":
+                date_expr = "DATE_TRUNC('month', CAST(tg_ptc AS DATE))"
+                date_format = "%m/%Y"
             else:
-                st.info("Không có dữ liệu khâu sai cho các đơn Failed SLA trong khoảng thời gian đã chọn.")
+                date_expr = "CAST(tg_ptc AS DATE)"
+                date_format = "%d/%m/%Y"
+    
+            df_odr_daily = con.execute(f"""
+                SELECT 
+                    STRFTIME({date_expr}, '{date_format}') as time_label, 
+                    COUNT(DISTINCT ma_phieugui) as tong_sl_phat,
+                    COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
+                    ROUND(COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 1) as ty_le_odr,
+                    MIN({date_expr}) as sort_key
+                FROM orders 
+                WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+                GROUP BY 1
+                ORDER BY sort_key ASC
+            """).fetchdf()
+    
+            if len(df_odr_daily) > 0:
+                # Tạo biểu đồ 2 trục Y (Dual-Axis)
+                fig_odr = make_subplots(specs=[[{"secondary_y": True}]])
+    
+                # 1. Line Sản lượng phát thành công (Trục trái - Đỏ)
+                fig_odr.add_trace(
+                    go.Scatter(
+                        x=df_odr_daily["time_label"],
+                        y=df_odr_daily["sl_ptc"],
+                        name="Sản lượng PTC",
+                        mode="lines+markers+text",
+                        text=df_odr_daily["sl_ptc"].apply(lambda x: f"{x:,.0f}"),
+                        textposition="top center",
+                        textfont=dict(size=10, color="#c62828"),
+                        line=dict(color="#c62828", width=2.5),
+                        marker=dict(size=6, color="#c62828")
+                    ),
+                    secondary_y=False
+                )
+    
+                # 2. Line Tỷ lệ ODR % (Trục phải - Xanh lá)
+                fig_odr.add_trace(
+                    go.Scatter(
+                        x=df_odr_daily["time_label"],
+                        y=df_odr_daily["ty_le_odr"],
+                        name="Tỷ lệ ODR (%)",
+                        mode="lines+markers+text",
+                        text=df_odr_daily["ty_le_odr"].apply(lambda x: f"{x:.1f}%"),
+                        textposition="bottom center",
+                        textfont=dict(size=10, color="#2e7d32"),
+                        line=dict(color="#2e7d32", width=2, dash="dot"),
+                        marker=dict(size=6, color="#2e7d32")
+                    ),
+                    secondary_y=True
+                )
+    
+                fig_odr.update_layout(
+                    height=390, 
+                    margin=dict(l=10, r=10, t=25, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    xaxis=dict(type='category', title=None)
+                )
+    
+                fig_odr.update_yaxes(title_text="Sản lượng phát", secondary_y=False, showgrid=True)
+                fig_odr.update_yaxes(title_text="Tỷ lệ ODR (%)", secondary_y=True, showgrid=False, range=[0, 110])
+    
+                st.plotly_chart(fig_odr, use_container_width=True)
+            else:
+                st.warning("Không có dữ liệu phát thành công trong khoảng thời gian đã chọn.")
         except Exception as e:
-            st.error(f"Lỗi tính toán biểu đồ khâu sai: {e}")
+            st.error(f"Lỗi tính toán biểu đồ: {e}")
+    
+        with c_odr_right:
+            st.subheader("📊 TỶ TRỌNG CÁC KHÂU SAI (%)")
+            try:
+                # Truy vấn đếm số lượng đơn Failed SLA theo từng Khâu sai
+                df_khau_sai = con.execute(f"""
+                    WITH failed_orders AS (
+                        SELECT 
+                            COALESCE(CAST(KHAU_SAI AS VARCHAR), 'Chưa xác định') as khau_sai,
+                            COUNT(DISTINCT ma_phieugui) as sl_failed
+                        FROM orders
+                        WHERE {where_sql_odr} 
+                          AND tg_ptc IS NOT NULL
+                          AND danh_gia_giao_hang = 'Giao không đúng giờ'
+                        GROUP BY 1
+                    ),
+                    total_failed AS (
+                        SELECT SUM(sl_failed) as total_sl FROM failed_orders
+                    )
+                    SELECT 
+                        f.khau_sai,
+                        f.sl_failed,
+                        ROUND(f.sl_failed * 100.0 / NULLIF(t.total_sl, 0), 2) as ty_le_pct
+                    FROM failed_orders f, total_failed t
+                    WHERE f.khau_sai IS NOT NULL AND f.khau_sai != ''
+                    ORDER BY f.sl_failed ASC
+                """).fetchdf()
+    
+                if len(df_khau_sai) > 0:
+                    fig_khau_sai = px.bar(
+                        df_khau_sai,
+                        x="ty_le_pct",
+                        y="khau_sai",
+                        orientation="h",
+                        text=df_khau_sai["ty_le_pct"].apply(lambda x: f"{x:.2f}%")
+                    )
+    
+                    fig_khau_sai.update_traces(
+                        marker_color="#c62828",  # Màu đỏ thương hiệu
+                        textposition="outside",
+                        textfont=dict(size=11, color="#111111", weight="bold")
+                    )
+    
+                    fig_khau_sai.update_layout(
+                        height=390,
+                        margin=dict(l=10, r=45, t=10, b=10),
+                        xaxis_title=None,
+                        yaxis_title=None,
+                        xaxis=dict(showgrid=False, showticklabels=False, range=[0, max(df_khau_sai["ty_le_pct"]) * 1.25]),
+                        yaxis=dict(showgrid=False, tickfont=dict(size=12, color="#111111"))
+                    )
+    
+                    st.plotly_chart(fig_khau_sai, use_container_width=True)
+                else:
+                    st.info("Không có dữ liệu khâu sai cho các đơn Failed SLA trong khoảng thời gian đã chọn.")
+            except Exception as e:
+                st.error(f"Lỗi tính toán biểu đồ khâu sai: {e}")
 
     st.divider()
 
