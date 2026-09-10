@@ -605,8 +605,8 @@ def render(file_id: str):
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
                 ROUND(COUNT(DISTINCT CASE WHEN PTC_1 = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END), 0), 2) as ptc1,
-                ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
-                ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
+                ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
+                ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
             GROUP BY 1
         """).fetchdf().set_index("w_key") if len(week_cols) > 0 else pd.DataFrame()
