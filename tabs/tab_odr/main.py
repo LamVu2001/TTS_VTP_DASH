@@ -21,7 +21,6 @@ def render(file_id: str):
     if "f_tuyen" not in st.session_state: st.session_state.f_tuyen = []
     if "f_ld" not in st.session_state: st.session_state.f_ld = []
     if "f_tl" not in st.session_state: st.session_state.f_tl = []
-    if "f_tt" not in st.session_state: st.session_state.f_tt = []
 
     # Hàm trợ giúp tạo mệnh đề SQL IN (...) an toàn chống SQL Injection
     def sql_in_clause(column_name, selected_list):
@@ -34,7 +33,7 @@ def render(file_id: str):
     # Hàm dựng câu lệnh WHERE cho Cross-Filtering
     def build_where(exclude=None):
         conds = ["1=1"]
-        if isinstance(st.session_state.f_date, (list, tuple)) and len(st.session_state.f_date) == 2:
+        if exclude != "date" and isinstance(st.session_state.f_date, (list, tuple)) and len(st.session_state.f_date) == 2:
             conds.append(f"clean_date BETWEEN '{st.session_state.f_date[0]}' AND '{st.session_state.f_date[1]}'")
         
         if exclude != "tinh":
@@ -55,11 +54,11 @@ def render(file_id: str):
         if exclude != "tl":
             c = sql_in_clause("nhom_trong_luong", st.session_state.f_tl)
             if c: conds.append(c)
-        if exclude != "tt":
-            c = sql_in_clause("ma_trangthai", st.session_state.f_tt)
-            if c: conds.append(c)
             
         return " AND ".join(conds)
+
+    # KHỞI TẠO BIẾN WHERE SQL TOÀN CỤC DÙNG DƯỚI TOÀN BỘ CÁC BẢNG
+    where_sql_odr = build_where()
 
     # 2. LẤY DANH SÁCH TỰ ĐỘNG THEO DỮ LIỆU CROSS-FILTER
     tinh_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(tinh_phat AS VARCHAR) FROM orders WHERE {build_where('tinh')} AND tinh_phat IS NOT NULL ORDER BY 1").fetchall()]
@@ -68,7 +67,6 @@ def render(file_id: str):
     tuyen_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(tuyen AS VARCHAR) FROM orders WHERE {build_where('tuyen')} AND tuyen IS NOT NULL ORDER BY 1").fetchall()]
     ld_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_dv_viettel AS VARCHAR) FROM orders WHERE {build_where('ld')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
     tl_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(nhom_trong_luong AS VARCHAR) FROM orders WHERE {build_where('tl')} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
-    tt_opts = [r[0] for r in con.execute(f"SELECT DISTINCT CAST(ma_trangthai AS VARCHAR) FROM orders WHERE {build_where('tt')} AND ma_trangthai IS NOT NULL ORDER BY 1").fetchall()]
 
     # Validate lọc sạch các value cũ không còn nằm trong danh sách tùy chọn mới
     st.session_state.f_tinh = [v for v in st.session_state.f_tinh if v in tinh_opts]
@@ -77,10 +75,9 @@ def render(file_id: str):
     st.session_state.f_tuyen = [v for v in st.session_state.f_tuyen if v in tuyen_opts]
     st.session_state.f_ld = [v for v in st.session_state.f_ld if v in ld_opts]
     st.session_state.f_tl = [v for v in st.session_state.f_tl if v in tl_opts]
-    st.session_state.f_tt = [v for v in st.session_state.f_tt if v in tt_opts]
 
-    # 3. HIỂN THỊ BỘ LỌC NGANG DẠNG MULTI-SELECT (8 Ô LỌC)
-    of1, of2, of3, of4, of5, of6, of7, of8 = st.columns(8)
+    # 3. HIỂN THỊ BỘ LỌC NGANG DẠNG MULTI-SELECT (7 Ô LỌC - ĐÃ XÓA MÃ TRẠNG THÁI)
+    of1, of2, of3, of4, of5, of6, of7 = st.columns(7)
 
     with of1:
         st.date_input("NGÀY PHẢI PHÁT", key="f_date")
@@ -96,34 +93,29 @@ def render(file_id: str):
         st.multiselect("LOẠI ĐƠN (DV)", ld_opts, key="f_ld", placeholder="Tất cả")
     with of7:
         st.multiselect("TRỌNG LƯỢNG", tl_opts, key="f_tl", placeholder="Tất cả")
-    with of8:
-        st.multiselect("MÃ TRẠNG THÁI", tt_opts, key="f_tt", placeholder="Tất cả")
 
-  # 4. TỔNG HỢP MỆNH ĐỀ WHERE VÀ TRUY VẤN KPI THEO NGÀY PHÁT THỰC TẾ (clean_date_ptc)
-    
-    # Tạo điều kiện lọc ngày theo clean_date_ptc dành riêng cho các chỉ số phát thành công
+    # 4. TỔNG HỢP TRUY VẤN KPI THEO NGÀY PHÁT THỰC TẾ (clean_date_ptc)
     ptc_date_cond = "1=1"
     if isinstance(st.session_state.f_date, (list, tuple)) and len(st.session_state.f_date) == 2:
         ptc_date_cond = f"clean_date_ptc BETWEEN '{st.session_state.f_date[0]}' AND '{st.session_state.f_date[1]}'"
 
-    # Điều kiện WHERE hoàn chỉnh cho KPI (kết hợp bộ lọc khác + ngày phát clean_date_ptc)
     where_kpi_sql = f"{build_where(exclude='date')} AND {ptc_date_cond}"
 
     res_metrics_odr = con.execute(f"""
         SELECT 
-            -- Tổng đơn được phát thành công trong kỳ (TT 501 + clean_date_ptc trong khoảng lọc)
+            -- (2) Mẫu số: Tổng đơn PTC TT 501 trong kỳ phát
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' THEN ma_phieugui 
             END) AS tong_ptc_501,
 
-            -- (1a) Đơn PTC 501 trong SLA cam kết (Phát đúng giờ)
+            -- (1a) Tử số: Đơn PTC 501 trong SLA cam kết (Phát đúng giờ)
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' 
                  AND danh_gia_giao_hang = 'Giao đúng giờ' 
                 THEN ma_phieugui 
             END) AS sl_ptc_501_in_sla,
             
-            -- (1b) Đơn có TT 501, 505, 506, 507, 509 phát lần 1 trong SLA cam kết
+            -- (1b) Tử số: Đơn có TT 501, 505, 506, 507, 509 phát lần 1 trong SLA cam kết
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) IN ('501', '505', '506', '507', '509') 
                  AND PTC_1 = 1 
@@ -137,32 +129,29 @@ def render(file_id: str):
             -- Đơn PTC Lần 1 chung trong kỳ
             COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1,
 
-            -- Tổng đơn phải phát (Lọc theo clean_date phân bổ ban đầu để so sánh)
-            (SELECT COUNT(DISTINCT ma_phieugui) FROM orders WHERE {build_where()}) AS tong_sl_phai_phat
+            -- Tổng sản lượng phát (Sản lượng phải phát ban đầu)
+            (SELECT COUNT(DISTINCT ma_phieugui) FROM orders WHERE {where_sql_odr}) AS tong_sl_phai_phat
 
         FROM orders 
         WHERE {where_kpi_sql} AND clean_date_ptc IS NOT NULL
     """).fetchone()
 
-    mau_so_501 = res_metrics_odr[0] or 0          # (2) Tổng đơn PTC TT 501 được phát trong kỳ
+    mau_so_501 = res_metrics_odr[0] or 0          # (2) Mẫu số đơn PTC TT 501
     tu_so_dung_gio = res_metrics_odr[1] or 0      # (1a) Tử số Đúng giờ
     tu_so_lan1_dung_gio = res_metrics_odr[2] or 0 # (1b) Tử số Đúng giờ lần 1
     sl_ptc = res_metrics_odr[3] or 0
     sl_ptc1 = res_metrics_odr[4] or 0
-    tong_sl_phai_phat = res_metrics_odr[5] or 0  # Sản lượng phải phát (giao trong kỳ)
+    tong_sl_phai_phat = res_metrics_odr[5] or 0
 
-    # Tính % theo đúng công thức
+    # Tính toán tỷ lệ %
     pct_ptc = (sl_ptc / tong_sl_phai_phat * 100) if tong_sl_phai_phat > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_phai_phat * 100) if tong_sl_phai_phat > 0 else 0
-    
-    # Tính 2 KPI đúng giờ theo mẫu số đơn PTC TT 501 phát trong kỳ
     pct_ptc_dung_gio = (tu_so_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
     pct_ptc1_dung_gio = (tu_so_lan1_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
 
-    # HIỂN THỊ METRICS
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
     with m_odr1: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHẢI PHÁT</div><div class="metric-value">{tong_sl_phai_phat:,.0f}</div><div class="metric-sub-green">▲ Phân bổ</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG PHÁT</div><div class="metric-value">{tong_sl_phai_phat:,.0f}</div><div class="metric-sub-green">▲ Thực tế</div></div>', unsafe_allow_html=True)
     with m_odr2: 
         st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ PHÁT TC</div><div class="metric-value">{pct_ptc:.1f}%</div><div class="metric-sub-green">Thực tế</div></div>', unsafe_allow_html=True)
     with m_odr3: 
@@ -174,27 +163,27 @@ def render(file_id: str):
 
     st.write("")
     
-    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG THEO THỜI GIAN PHẢI PHÁT (clean_date)
+    # 5. BIỂU ĐỒ XU HƯỚNG PHÁT THÀNH CÔNG THEO THỜI GIAN PHÁT THỰC TẾ (clean_date_ptc)
     c_odr_chart, c_odr_right = st.columns([2, 1.3])
     with c_odr_chart:
         st.subheader("📈 XU HƯỚNG SẢN LƯỢNG PHÁT THÀNH CÔNG")
         try:
-            where_chart_sql = f"{where_sql_odr} AND PTC = 1 AND clean_date IS NOT NULL"
+            where_chart_sql = f"{build_where(exclude='date')} AND {ptc_date_cond} AND PTC = 1 AND clean_date_ptc IS NOT NULL"
 
             df_odr_daily = con.execute(f"""
                 SELECT 
-                    CAST(clean_date AS VARCHAR) as ngay_phai_phat, 
+                    CAST(clean_date_ptc AS VARCHAR) as ngay_phat_tc, 
                     COUNT(DISTINCT ma_phieugui) as SanLuongPTC 
                 FROM orders 
                 WHERE {where_chart_sql}
-                GROUP BY clean_date 
-                ORDER BY clean_date ASC
+                GROUP BY clean_date_ptc 
+                ORDER BY clean_date_ptc ASC
             """).fetchdf()
 
             if len(df_odr_daily) > 0:
                 fig_odr = px.line(
                     df_odr_daily, 
-                    x="ngay_phai_phat", 
+                    x="ngay_phat_tc", 
                     y="SanLuongPTC", 
                     markers=True,
                     text="SanLuongPTC"
@@ -222,7 +211,7 @@ def render(file_id: str):
 
     with c_odr_right:
         st.subheader("💡 THÔNG TIN TỔNG QUAN ODR")
-        st.info("Biểu đồ bên trái thể hiện số lượng mã phiếu gửi phát thành công (COUNT DISTINCT ma_phieugui khi PTC = 1) phân bổ theo thời gian phải phát (clean_date) trong khoảng thời gian đã chọn.")
+        st.info("Biểu đồ bên trái thể hiện số lượng mã phiếu gửi phát thành công (COUNT DISTINCT ma_phieugui khi PTC = 1) nhóm theo mốc thời gian phát thực tế (clean_date_ptc) trong khoảng thời gian đã chọn.")
 
     st.divider()
 
@@ -311,7 +300,7 @@ def render(file_id: str):
     while len(sorted_days) < 7: sorted_days.insert(0, "--/--")
     d_vals = [days_dict.get(d, 0) for d in sorted_days]
 
-    m_current = tong_sl_odr
+    m_current = tong_sl_phai_phat
 
     all_tree_data = con.execute(f"SELECT COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt, COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY ma_doitac, tinh_phat, ma_buucuc_phat ORDER BY 1, 2, 4 DESC").fetchall()
 
@@ -523,8 +512,8 @@ def render(file_id: str):
             </thead>
             <tbody>
                 <tr class="total-row">
-                    <td class="col-branch">TOTAL</td><td>{tong_sl_odr:,.0f}</td><td>{int(tong_sl_odr*0.03):,.0f}</td><td>3.0%</td>
-                    <td class="ton-highlight-red">{int(tong_sl_odr*0.005):,.0f}</td><td class="ton-highlight-orange">{int(tong_sl_odr*0.002):,.0f}</td><td class="ton-highlight-red">1.50%</td><td class="ton-highlight-orange">0.65%</td>
+                    <td class="col-branch">TOTAL</td><td>{tong_sl_phai_phat:,.0f}</td><td>{int(tong_sl_phai_phat*0.03):,.0f}</td><td>3.0%</td>
+                    <td class="ton-highlight-red">{int(tong_sl_phai_phat*0.005):,.0f}</td><td class="ton-highlight-orange">{int(tong_sl_phai_phat*0.002):,.0f}</td><td class="ton-highlight-red">1.50%</td><td class="ton-highlight-orange">0.65%</td>
                 </tr>
                 {fm_rows_html}
             </tbody>
@@ -598,8 +587,8 @@ def render(file_id: str):
             </thead>
             <tbody>
                 <tr class="total-row">
-                    <td class="col-branch">TOTAL</td><td>{tong_sl_odr:,.0f}</td><td>{int(tong_sl_odr*0.04):,.0f}</td><td>4.0%</td>
-                    <td class="ton-highlight-red">{int(tong_sl_odr*0.008):,.0f}</td><td class="ton-highlight-orange">{int(tong_sl_odr*0.003):,.0f}</td><td class="ton-highlight-orange">0.80%</td><td class="ton-highlight-orange">0.30%</td>
+                    <td class="col-branch">TOTAL</td><td>{tong_sl_phai_phat:,.0f}</td><td>{int(tong_sl_phai_phat*0.04):,.0f}</td><td>4.0%</td>
+                    <td class="ton-highlight-red">{int(tong_sl_phai_phat*0.008):,.0f}</td><td class="ton-highlight-orange">{int(tong_sl_phai_phat*0.003):,.0f}</td><td class="ton-highlight-orange">0.80%</td><td class="ton-highlight-orange">0.30%</td>
                 </tr>
                 {lm_rows_html}
             </tbody>
