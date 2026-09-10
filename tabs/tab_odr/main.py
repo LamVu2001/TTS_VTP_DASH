@@ -562,31 +562,31 @@ def render(file_id: str):
 
     st.divider()
 
- # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (ĐÃ CẬP NHẬT CỘT ngay_bat_dau_phai_phat)
+ # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX AN TOÀN NONE DUCKDB)
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
         # 1. LẤY MỐC THỜI GIAN NGÀY / TUẦN
-        days_info = con.execute(f"""
+        days_df = con.execute(f"""
             SELECT CAST(tg_ptc AS DATE) as dt, STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 7
         """).fetchdf()
 
-        day_cols = days_info["dt"].tolist()[::-1] if not days_info.empty else []
-        day_labels = days_info["dt_label"].tolist()[::-1] if not days_info.empty else ["--/--"] * 7
+        day_cols = days_df["dt"].tolist()[::-1] if days_df is not None and not days_df.empty else []
+        day_labels = days_df["dt_label"].tolist()[::-1] if days_df is not None and not days_df.empty else ["--/--"] * 7
 
-        weeks_info = con.execute(f"""
+        weeks_df = con.execute(f"""
             SELECT 'W' || STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%W') as week_label,
                    MIN(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)) as min_date
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
             GROUP BY 1 ORDER BY min_date DESC LIMIT 5
         """).fetchdf()
 
-        week_cols = weeks_info["min_date"].tolist()[::-1] if not weeks_info.empty else []
-        week_labels = weeks_info["week_label"].tolist()[::-1] if not weeks_info.empty else ["W--"] * 5
+        week_cols = weeks_df["min_date"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
+        week_labels = weeks_df["week_label"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else ["W--"] * 5
 
-        # 2. AGGREGATE TỔNG THEO NGÀY, TUẦN, THÁNG (ĐÃ SỬA CỘT ngay_bat_dau_phai_phat)
+        # 2. TRUY VẤN AGGREGATE TỔNG
         df_d = con.execute(f"""
             SELECT 
                 CAST(tg_ptc AS DATE) as d_key,
@@ -623,9 +623,9 @@ def render(file_id: str):
             GROUP BY 1 ORDER BY 1 DESC LIMIT 2
         """).fetchdf()
 
-        # Tra cứu siêu tốc bằng Python Dictionary
-        dict_d = {row.d_key: row for row in df_d.itertuples()} if not df_d.empty else {}
-        dict_w = {row.w_key: row for row in df_w.itertuples()} if not df_w.empty else {}
+        # Ép kiểu an toàn tránh AttributeError
+        dict_d = {row.d_key: row for row in df_d.itertuples()} if df_d is not None and not df_d.empty else {}
+        dict_w = {row.w_key: row for row in df_w.itertuples()} if df_w is not None and not df_w.empty else {}
 
         def get_v_fast(d_map, key, field_idx):
             if key in d_map:
@@ -645,8 +645,8 @@ def render(file_id: str):
         v_w_in   = [get_v_fast(dict_w, w, 5) for w in week_cols]
         v_w_next = [get_v_fast(dict_w, w, 6) for w in week_cols]
 
-        m_c = df_m.iloc[0].to_dict() if len(df_m) > 0 else {}
-        m_p = df_m.iloc[1].to_dict() if len(df_m) > 1 else m_c
+        m_c = df_m.iloc[0].to_dict() if df_m is not None and len(df_m) > 0 else {}
+        m_p = df_m.iloc[1].to_dict() if df_m is not None and len(df_m) > 1 else m_c
 
         def fmt_diff(val, is_pct=False):
             color = "text-green" if val >= 0 else "text-red"
@@ -674,7 +674,7 @@ def render(file_id: str):
         wow_next = v_w_next[-1] - v_w_next[-2] if len(v_w_next)>1 else 0
         mom_next = m_c.get("nextday",0) - m_p.get("nextday",0)
 
-        # 3. TRUY VẤN TOÀN BỘ DỮ LIỆU CÂY
+        # 3. TRUY VẤN CÂY CÓ BẢO VỆ CHỐNG NONE
         all_bc_df = con.execute(f"""
             SELECT 
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
@@ -686,13 +686,14 @@ def render(file_id: str):
         """).fetchdf()
 
         dt_dict = {}
-        for row in all_bc_df.itertuples():
-            dt, tinh, bc, sl = row.dt, row.tinh, row.bc, row.sl
-            if dt not in dt_dict: dt_dict[dt] = {'sl': 0, 'tinhs': {}}
-            dt_dict[dt]['sl'] += sl
-            if tinh not in dt_dict[dt]['tinhs']: dt_dict[dt]['tinhs'][tinh] = {'sl': 0, 'bcs': []}
-            dt_dict[dt]['tinhs'][tinh]['sl'] += sl
-            dt_dict[dt]['tinhs'][tinh]['bcs'].append((bc, sl))
+        if all_bc_df is not None and not all_bc_df.empty:
+            for row in all_bc_df.itertuples():
+                dt, tinh, bc, sl = row.dt, row.tinh, row.bc, row.sl
+                if dt not in dt_dict: dt_dict[dt] = {'sl': 0, 'tinhs': {}}
+                dt_dict[dt]['sl'] += sl
+                if tinh not in dt_dict[dt]['tinhs']: dt_dict[dt]['tinhs'][tinh] = {'sl': 0, 'bcs': []}
+                dt_dict[dt]['tinhs'][tinh]['sl'] += sl
+                dt_dict[dt]['tinhs'][tinh]['bcs'].append((bc, sl))
 
         matrix_rows_list = []
         n_days = max(len(day_cols), 1)
@@ -740,7 +741,7 @@ def render(file_id: str):
         while len(day_labels) < 7: day_labels.insert(0, "--/--")
         while len(week_labels) < 5: week_labels.insert(0, "W--")
 
-        # 4. RENDER BẢNG HTML
+        # 4. RENDER HTML
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
@@ -854,7 +855,6 @@ def render(file_id: str):
         st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {e}")
 
     st.divider()
-
 
     # # 8. BA BẢNG TỒN KHÂU (FM, MM, LM)
     # ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
