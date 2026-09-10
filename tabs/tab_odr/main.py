@@ -6,12 +6,13 @@ import streamlit.components.v1 as components
 from datetime import datetime, date
 
 # Import trực tiếp file data_loader.py từ thư mục gốc
-from .data_loader import get_odr_db
+from data_loader import get_connection
 
 def render(file_id: str):
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
 
-    con = get_odr_db(file_id)
+    # 2. Gọi hàm kết nối dùng chung
+    con = get_connection(file_id)
 
     # 1. KHỞI TẠO STATE NGÀY MẶC ĐỊNH TỪ ĐẦU THÁNG HIỆN TẠI ĐẾN NGÀY HIỆN TẠI
     if "f_date" not in st.session_state or not st.session_state.f_date:
