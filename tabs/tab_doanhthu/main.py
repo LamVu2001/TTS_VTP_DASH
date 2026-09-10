@@ -2,10 +2,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 import plotly.express as px
 import pandas as pd
+from datetime import date, datetime  # <-- THÊM DÒNG NÀY VÀO ĐẦU FILE
 
-# ---------------------------------------------------------
-# IMPORT TRỰC TIẾP TỪ DATA_LOADER Ở THƯ MỤC GỐC
-# ---------------------------------------------------------
 from data_loader import get_connection
 
 
