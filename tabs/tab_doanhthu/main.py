@@ -1,37 +1,46 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import plotly.express as px
-from ..tab_odr.data_loader import get_connection
+import pandas as pd
+
+# Import hàm get_connection an toàn
+try:
+    from tabs.tab_odr.data_loader import get_connection
+except ImportError:
+    from tab_odr.data_loader import get_connection
 
 def render(file_id=None):
     # Lấy kết nối DuckDB dùng chung từ tab_odr
-    con = get_connection(file_id)
-
-    # 1. KHỞI TẠO DỮ LIỆU BỘ LỌC CHO TAB DOANH THU
-    # Lấy danh sách mã khách hàng, đối tác, tỉnh phát từ database để làm selectbox
     try:
-        kh_list = ["Tất cả"] + [row[0] for row in con.execute("SELECT DISTINCT ma_khgui FROM orders WHERE ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
-    except Exception:
-        kh_list = ["Tất cả"]
+        con = get_connection(file_id)
+    except Exception as e:
+        st.error(f"Lỗi kết nối cơ sở dữ liệu: {e}")
+        return
 
-    try:
-        dt_list = ["Tất cả"] + [row[0] for row in con.execute("SELECT DISTINCT ma_doitac FROM orders WHERE ma_doitac IS NOT NULL ORDER BY 1").fetchall()]
-    except Exception:
-        dt_list = ["Tất cả"]
+    # ---------------------------------------------------------
+    # 1. KHỞI TẠO DỮ LIỆU BỘ LỌC
+    # ---------------------------------------------------------
+    def get_options(query):
+        try:
+            res = con.execute(query).fetchall()
+            return ["Tất cả"] + [row[0] for row in res if row[0] is not None]
+        except Exception:
+            return ["Tất cả"]
 
-    try:
-        tinh_list = ["Tất cả"] + [row[0] for row in con.execute("SELECT DISTINCT tinh_phat FROM orders WHERE tinh_phat IS NOT NULL ORDER BY 1").fetchall()]
-    except Exception:
-        tinh_list = ["Tất cả"]
+    kh_list = get_options("SELECT DISTINCT ma_khgui FROM orders WHERE ma_khgui IS NOT NULL ORDER BY 1")
+    dt_list = get_options("SELECT DISTINCT ma_doitac FROM orders WHERE ma_doitac IS NOT NULL ORDER BY 1")
+    tinh_list = get_options("SELECT DISTINCT tinh_phat FROM orders WHERE tinh_phat IS NOT NULL ORDER BY 1")
 
+    # ---------------------------------------------------------
     # 2. GIAO DIỆN BỘ LỌC (FILTERS)
+    # ---------------------------------------------------------
     f1, f2, f3, f4, f5, f6 = st.columns(6)
-    with f1: filter_date_dt = st.date_input("NGÀY", value=(), key="dt_date")
-    with f2: filter_kh_dt = st.selectbox("MÃ KHÁCH HÀNG", kh_list, key="dt_kh")
-    with f3: filter_dt_dt = st.selectbox("MÃ ĐỐI TÁC", dt_list, key="dt_dt")
-    with f4: filter_cn_dt = st.selectbox("TỈNH PHÁT", tinh_list, key="dt_cn")
-    with f5: filter_ld_dt = st.selectbox("LOẠI ĐƠN", ["Tất cả"], key="dt_ld")
-    with f6: filter_tl_dt = st.selectbox("TRỌNG LƯỢNG", ["Tất cả", "< 500g", "500g - 2kg", "> 2kg"], key="dt_tl")
+    with f1: filter_date_dt = st.date_input("NGÀY", value=(), key="dt_filter_date")
+    with f2: filter_kh_dt = st.selectbox("MÃ KHÁCH HÀNG", kh_list, key="dt_filter_kh")
+    with f3: filter_dt_dt = st.selectbox("MÃ ĐỐI TÁC", dt_list, key="dt_filter_dt")
+    with f4: filter_cn_dt = st.selectbox("TỈNH PHÁT", tinh_list, key="dt_filter_cn")
+    with f5: filter_ld_dt = st.selectbox("LOẠI ĐƠN", ["Tất cả"], key="dt_filter_ld")
+    with f6: filter_tl_dt = st.selectbox("TRỌNG LƯỢNG", ["Tất cả", "< 500g", "500g - 2kg", "> 2kg"], key="dt_filter_tl")
 
     # Xây dựng câu lệnh WHERE động
     where_clauses_dt = ["1=1"]
@@ -39,20 +48,42 @@ def render(file_id=None):
     if filter_dt_dt != "Tất cả": where_clauses_dt.append(f"ma_doitac = '{filter_dt_dt}'")
     if filter_kh_dt != "Tất cả": where_clauses_dt.append(f"ma_khgui = '{filter_kh_dt}'")
     
-    if isinstance(filter_date_dt, tuple) and len(filter_date_dt) == 2:
+    if isinstance(filter_date_dt, (list, tuple)) and len(filter_date_dt) == 2:
         start_d, end_d = filter_date_dt[0], filter_date_dt[1]
         where_clauses_dt.append(f"clean_date BETWEEN '{start_d}' AND '{end_d}'")
 
     where_sql_dt = " AND ".join(where_clauses_dt)
 
+    # ---------------------------------------------------------
     # 3. TRUY VẤN METRICS TỔNG QUAN
-    res_metrics = con.execute(f"""
-        SELECT COALESCE(SUM(tong_cuoc), 0) / 1e9, COUNT(ma_phieugui)
-        FROM orders WHERE {where_sql_dt}
-    """).fetchone()
-    
-    tong_dt = res_metrics[0] if res_metrics else 0
-    tong_sl = res_metrics[1] if res_metrics else 0
+    # ---------------------------------------------------------
+    try:
+        res_metrics = con.execute(f"""
+            SELECT COALESCE(SUM(tong_cuoc), 0) / 1e9, COUNT(ma_phieugui)
+            FROM orders WHERE {where_sql_dt}
+        """).fetchone()
+        tong_dt = res_metrics[0] if res_metrics and res_metrics[0] else 0.0
+        tong_sl = res_metrics[1] if res_metrics and res_metrics[1] else 0
+    except Exception:
+        tong_dt, tong_sl = 0.0, 0
+
+    # CSS cho Metric Cards
+    st.markdown("""
+        <style>
+            .metric-card {
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 12px;
+                text-align: center;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            }
+            .metric-title { font-size: 11px; font-weight: bold; color: #6c757d; text-transform: uppercase; }
+            .metric-value { font-size: 20px; font-weight: bold; color: #212529; margin: 4px 0; }
+            .metric-sub-green { font-size: 11px; color: #2e7d32; font-weight: 600; }
+            .metric-sub-red { font-size: 11px; color: #c62828; font-weight: 600; }
+        </style>
+    """, unsafe_allow_html=True)
 
     # Hiển thị Metric Cards
     m1, m2, m3, m4, m5 = st.columns(5)
@@ -84,8 +115,10 @@ def render(file_id=None):
                 fig.update_traces(line=dict(color="#c62828", width=2.5), marker=dict(size=6, color="#c62828"))
                 fig.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10), yaxis_title=None, xaxis_title=None)
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Chưa có dữ liệu theo ngày.")
         except Exception:
-            pass
+            st.info("Không thể tải biểu đồ xu hướng.")
 
     with c_top:
         st.subheader("TOP 10 KHÁCH HÀNG GIẢM DOANH THU")
@@ -102,35 +135,46 @@ def render(file_id=None):
     st.divider()
     st.subheader("📊 BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG")
 
+    # ---------------------------------------------------------
     # 4. XỬ LÝ DỮ LIỆU BẢNG MA TRẬN
-    days_data_dt = con.execute(f"""
-        SELECT clean_date, SUM(tong_cuoc)/1e9 as dt, COUNT(ma_phieugui) as sl 
-        FROM orders WHERE {where_sql_dt} AND clean_date IS NOT NULL 
-        GROUP BY clean_date ORDER BY clean_date DESC LIMIT 7
-    """).fetchall()
+    # ---------------------------------------------------------
+    try:
+        days_data_dt = con.execute(f"""
+            SELECT clean_date, SUM(tong_cuoc)/1e9 as dt, COUNT(ma_phieugui) as sl 
+            FROM orders WHERE {where_sql_dt} AND clean_date IS NOT NULL 
+            GROUP BY clean_date ORDER BY clean_date DESC LIMIT 7
+        """).fetchall()
+    except Exception:
+        days_data_dt = []
 
-    days_dt_dict = {row[0].strftime('%d/%m'): (row[1], row[2]) for row in days_data_dt if row[0]}
+    days_dt_dict = {row[0].strftime('%d/%m'): (row[1] or 0, row[2] or 0) for row in days_data_dt if row[0]}
     sorted_days_dt = sorted(list(days_dt_dict.keys()))
     while len(sorted_days_dt) < 7:
         sorted_days_dt.insert(0, "--/--")
+        
     d_dt_vals = [days_dt_dict.get(d, (0, 0))[0] for d in sorted_days_dt]
     d_sl_vals = [days_dt_dict.get(d, (0, 0))[1] for d in sorted_days_dt]
 
-    tree_raw_data = con.execute(f"""
-        SELECT 
-           COALESCE(ma_doitac, 'Khác') as dt,
-           COALESCE(ma_khgui, 'Khác') as kh,
-           COALESCE(tinh_phat, 'Khác') as tinh,
-           COALESCE(ma_buucuc_phat, 'Khác') as bc,
-           SUM(tong_cuoc)/1e9 as tong_dt,
-           COUNT(ma_phieugui) as tong_sl
-        FROM orders WHERE {where_sql_dt}
-        GROUP BY ma_doitac, ma_khgui, tinh_phat, ma_buucuc_phat
-        ORDER BY dt, tong_dt DESC
-    """).fetchall()
+    try:
+        tree_raw_data = con.execute(f"""
+            SELECT 
+               COALESCE(ma_doitac, 'Khác') as dt,
+               COALESCE(ma_khgui, 'Khác') as kh,
+               COALESCE(tinh_phat, 'Khác') as tinh,
+               COALESCE(ma_buucuc_phat, 'Khác') as bc,
+               SUM(tong_cuoc)/1e9 as tong_dt,
+               COUNT(ma_phieugui) as tong_sl
+            FROM orders WHERE {where_sql_dt}
+            GROUP BY ma_doitac, ma_khgui, tinh_phat, ma_buucuc_phat
+            ORDER BY dt, tong_dt DESC
+        """).fetchall()
+    except Exception:
+        tree_raw_data = []
 
     dt_structure = {}
     for dt, kh, tinh, bc, dt_val, sl_val in tree_raw_data:
+        dt_val = dt_val or 0
+        sl_val = sl_val or 0
         if dt not in dt_structure:
             dt_structure[dt] = {'dt': 0, 'sl': 0, 'khs': {}, 'tinhs': {}}
         dt_structure[dt]['dt'] += dt_val
@@ -147,19 +191,24 @@ def render(file_id=None):
         dt_structure[dt]['tinhs'][tinh]['sl'] += sl_val
         dt_structure[dt]['tinhs'][tinh]['bcs'][bc] = {'dt': dt_val, 'sl': sl_val}
 
-    tinh_raw_data = con.execute(f"""
-        SELECT 
-           COALESCE(tinh_phat, 'Khác') as tinh,
-           COALESCE(ma_buucuc_phat, 'Khác') as bc,
-           SUM(tong_cuoc)/1e9 as tong_dt,
-           COUNT(ma_phieugui) as tong_sl
-        FROM orders WHERE {where_sql_dt}
-        GROUP BY tinh_phat, ma_buucuc_phat
-        ORDER BY tong_dt DESC
-    """).fetchall()
+    try:
+        tinh_raw_data = con.execute(f"""
+            SELECT 
+               COALESCE(tinh_phat, 'Khác') as tinh,
+               COALESCE(ma_buucuc_phat, 'Khác') as bc,
+               SUM(tong_cuoc)/1e9 as tong_dt,
+               COUNT(ma_phieugui) as tong_sl
+            FROM orders WHERE {where_sql_dt}
+            GROUP BY tinh_phat, ma_buucuc_phat
+            ORDER BY tong_dt DESC
+        """).fetchall()
+    except Exception:
+        tinh_raw_data = []
 
     tinh_independent_struct = {}
     for tinh, bc, dt_val, sl_val in tinh_raw_data:
+        dt_val = dt_val or 0
+        sl_val = sl_val or 0
         if tinh not in tinh_independent_struct:
             tinh_independent_struct[tinh] = {'dt': 0, 'sl': 0, 'bcs': {}}
         tinh_independent_struct[tinh]['dt'] += dt_val
@@ -169,7 +218,7 @@ def render(file_id=None):
     def generate_matrix_rows(is_doanh_thu=True):
         rows_html = ""
         prefix = "dt_sec" if is_doanh_thu else "sl_sec"
-        fmt = lambda v: f"{v:.2f}" if is_doanh_thu else f"{v//1:,.0f}"
+        fmt = lambda v: f"{v:.2f}" if is_doanh_thu else f"{v:,.0f}"
 
         for idx_dt, (dt_name, dt_data) in enumerate(dt_structure.items()):
             val_dt = dt_data['dt'] if is_doanh_thu else dt_data['sl']
@@ -201,12 +250,12 @@ def render(file_id=None):
                 val_kh = kh_data['dt'] if is_doanh_thu else kh_data['sl']
                 rows_html += f"""
                 <tr class="sub-row-3 {kh_group_id}" style="display:none; background-color: #ffffff; color: #333;">
-                   <td style="padding-left: 60px;">• Mã KH: <b>{kh_name}</b></td>
-                   <td>10</td><td>100.00</td>
-                   <td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td class="text-green">+6.8%</td>
-                   <td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td class="text-green">+6.8%</td>
-                   <td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td class="text-green">+6.8%</td>
-                   <td>{"10" if is_doanh_thu else "-"}</td><td class="text-green">{"Wait" if is_doanh_thu else "-"}</td>
+                    <td style="padding-left: 60px;">• Mã KH: <b>{kh_name}</b></td>
+                    <td>10</td><td>100.00</td>
+                    <td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td>{fmt(val_kh/7)}</td><td class="text-green">+6.8%</td>
+                    <td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td class="text-green">+6.8%</td>
+                    <td>{fmt(val_kh)}</td><td>{fmt(val_kh)}</td><td class="text-green">+6.8%</td>
+                    <td>{"10" if is_doanh_thu else "-"}</td><td class="text-green">{"Wait" if is_doanh_thu else "-"}</td>
                 </tr>
                 """
 
@@ -226,12 +275,12 @@ def render(file_id=None):
                 tinh_sub_id = f"{tinh_group_id}_tinh_{idx_tinh}"
                 rows_html += f"""
                 <tr class="sub-row-3 {tinh_group_id}" style="display:none; background-color: #fcfcfc; color: #2e7d32;" onclick="toggleRow('{tinh_sub_id}', event, 'btn_{tinh_sub_id}')">
-                   <td style="padding-left: 60px;"><span class="toggle-btn" id="btn_{tinh_sub_id}">[+]</span> Tỉnh phát: <b>{tinh_name}</b></td>
-                   <td>10</td><td>100.00</td>
-                   <td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td class="text-green">+6.8%</td>
-                   <td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td class="text-green">+6.8%</td>
-                   <td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td class="text-green">+6.8%</td>
-                   <td>{"10" if is_doanh_thu else "-"}</td><td class="text-green">{"Wait" if is_doanh_thu else "-"}</td>
+                    <td style="padding-left: 60px;"><span class="toggle-btn" id="btn_{tinh_sub_id}">[+]</span> Tỉnh phát: <b>{tinh_name}</b></td>
+                    <td>10</td><td>100.00</td>
+                    <td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td class="text-green">+6.8%</td>
+                    <td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td class="text-green">+6.8%</td>
+                    <td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td class="text-green">+6.8%</td>
+                    <td>{"10" if is_doanh_thu else "-"}</td><td class="text-green">{"Wait" if is_doanh_thu else "-"}</td>
                 </tr>
                 """
                 for bc_name, bc_data in tinh_data['bcs'].items():
@@ -252,11 +301,11 @@ def render(file_id=None):
         rows_html += f"""
         <tr class="sub-row-1 group_{prefix}_root" style="display:none; background-color: #e8f5e9; font-weight:bold; color: #2e7d32;" onclick="toggleRow('{tinh_root_id}', event, 'btn_{tinh_root_id}')">
             <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{tinh_root_id}">[+]</span> <b>TỈNH PHÁT</b></td>
-           <td>-</td><td>-</td>
-           <td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td class="text-green">+6.8%</td>
-           <td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td class="text-green">+6.8%</td>
-           <td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td class="text-green">+6.8%</td>
-           <td>-</td><td>-</td>
+            <td>-</td><td>-</td>
+            <td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td>{fmt(tot_tinh_val/7)}</td><td class="text-green">+6.8%</td>
+            <td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td class="text-green">+6.8%</td>
+            <td>{fmt(tot_tinh_val)}</td><td>{fmt(tot_tinh_val)}</td><td class="text-green">+6.8%</td>
+            <td>-</td><td>-</td>
         </tr>
         """
         for idx_tinh, (tinh_name, tinh_data) in enumerate(tinh_independent_struct.items()):
@@ -265,11 +314,11 @@ def render(file_id=None):
             rows_html += f"""
             <tr class="sub-row-2 {tinh_root_id}" style="display:none; background-color: #ffffff; color: #2e7d32;" onclick="toggleRow('{tinh_ind_clean_id}', event, 'btn_{tinh_ind_clean_id}')">
                 <td style="padding-left: 40px;"><span class="toggle-btn" id="btn_{tinh_ind_clean_id}">[+]</span> Tỉnh phát: <b>{tinh_name}</b></td>
-               <td>10</td><td>100.00</td>
-               <td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td class="text-green">+6.8%</td>
-               <td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td class="text-green">+6.8%</td>
-               <td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td class="text-green">+6.8%</td>
-               <td>{"10" if is_doanh_thu else "-"}</td><td class="text-green">{"Wait" if is_doanh_thu else "-"}</td>
+                <td>10</td><td>100.00</td>
+                <td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td>{fmt(val_tinh/7)}</td><td class="text-green">+6.8%</td>
+                <td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td class="text-green">+6.8%</td>
+                <td>{fmt(val_tinh)}</td><td>{fmt(val_tinh)}</td><td class="text-green">+6.8%</td>
+                <td>{"10" if is_doanh_thu else "-"}</td><td class="text-green">{"Wait" if is_doanh_thu else "-"}</td>
             </tr>
             """
             for bc_name, bc_data in tinh_data['bcs'].items():
@@ -366,4 +415,4 @@ def render(file_id=None):
     </html>
     """
 
-    components.html(matrix_dt_html, height=480, scrolling=True)
+    components.html(matrix_dt_html, height=520, scrolling=True)
