@@ -566,110 +566,58 @@ def render(file_id: str):
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
-        # Sử dụng cột PTC_1 = 1 theo đúng cấu trúc dữ liệu
-        lan1_expr = "PTC_1 = 1"
-
-        # --- 1. TÍNH DỮ LIỆU THỰC CHO 7 NGÀY GẦN NHẤT ---
-        days_df = con.execute(f"""
+        # --- 1. LẤY DANH SÁCH CỘT THỜI GIAN ĐỘNG (7 NGÀY, 5 TUẦN, THÁNG) ---
+        days_info = con.execute(f"""
             SELECT 
                 CAST(tg_ptc AS DATE) as dt,
-                STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label,
-                COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
-                COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
-                COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
-                COUNT(DISTINCT CASE WHEN {lan1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
-                COUNT(DISTINCT CASE WHEN {lan1_expr} THEN ma_phieugui END) as sl_ptc1
+                STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label
             FROM orders 
             WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 7
         """).fetchdf()
 
-        if not days_df.empty:
-            days_df = days_df.sort_values("dt", ascending=True).reset_index(drop=True)
-            sorted_days = days_df["dt_label"].tolist()
-            d_vals_phat = days_df["sl_phai_phat"].tolist()
-            d_vals_ptc = days_df["sl_ptc"].tolist()
-            
-            # Tính % ODR & % PTC1 theo ngày
-            d_vals_pct_odr = [(dg / pt * 100) if pt > 0 else 0 for dg, pt in zip(days_df["sl_dung_gio"], days_df["sl_phai_phat"])]
-            d_vals_pct_ptc1 = [(p1g / p1 * 100) if p1 > 0 else 0 for p1g, p1 in zip(days_df["sl_ptc1_dung_gio"], days_df["sl_ptc1"])]
-            
-            # Tính DoD (Ngày cuối so với ngày áp cuối)
-            dod_phat = ((d_vals_phat[-1] - d_vals_phat[-2]) / d_vals_phat[-2] * 100) if len(d_vals_phat) > 1 and d_vals_phat[-2] > 0 else 0
-            dod_ptc = ((d_vals_ptc[-1] - d_vals_ptc[-2]) / d_vals_ptc[-2] * 100) if len(d_vals_ptc) > 1 and d_vals_ptc[-2] > 0 else 0
-            dod_odr = d_vals_pct_odr[-1] - d_vals_pct_odr[-2] if len(d_vals_pct_odr) > 1 else 0
-            dod_ptc1 = d_vals_pct_ptc1[-1] - d_vals_pct_ptc1[-2] if len(d_vals_pct_ptc1) > 1 else 0
+        if not days_info.empty:
+            days_info = days_info.sort_values("dt", ascending=True).reset_index(drop=True)
+            day_cols = days_info["dt"].tolist()
+            day_labels = days_info["dt_label"].tolist()
         else:
-            sorted_days = ["--/--"] * 7
-            d_vals_phat = d_vals_ptc = d_vals_pct_odr = d_vals_pct_ptc1 = [0] * 7
-            dod_phat = dod_ptc = dod_odr = dod_ptc1 = 0
+            day_cols, day_labels = [], ["--/--"] * 7
 
-        # --- 2. TÍNH DỮ LIỆU THỰC CHO 5 TUẦN GẦN NHẤT ---
-        weeks_df = con.execute(f"""
+        weeks_info = con.execute(f"""
             SELECT 
                 'W' || STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%W') as week_label,
-                COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
-                COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
-                COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
-                COUNT(DISTINCT CASE WHEN {lan1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
-                COUNT(DISTINCT CASE WHEN {lan1_expr} THEN ma_phieugui END) as sl_ptc1,
                 MIN(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)) as min_date
             FROM orders 
             WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
             GROUP BY 1 ORDER BY min_date DESC LIMIT 5
         """).fetchdf()
 
-        if not weeks_df.empty:
-            weeks_df = weeks_df.sort_values("min_date", ascending=True).reset_index(drop=True)
-            sorted_weeks = weeks_df["week_label"].tolist()
-            w_vals_phat = weeks_df["sl_phai_phat"].tolist()
-            w_vals_ptc = weeks_df["sl_ptc"].tolist()
-            w_vals_pct_odr = [(dg / pt * 100) if pt > 0 else 0 for dg, pt in zip(weeks_df["sl_dung_gio"], weeks_df["sl_phai_phat"])]
-            w_vals_pct_ptc1 = [(p1g / p1 * 100) if p1 > 0 else 0 for p1g, p1 in zip(weeks_df["sl_ptc1_dung_gio"], weeks_df["sl_ptc1"])]
-
-            wow_phat = ((w_vals_phat[-1] - w_vals_phat[-2]) / w_vals_phat[-2] * 100) if len(w_vals_phat) > 1 and w_vals_phat[-2] > 0 else 0
-            wow_ptc = ((w_vals_ptc[-1] - w_vals_ptc[-2]) / w_vals_ptc[-2] * 100) if len(w_vals_ptc) > 1 and w_vals_ptc[-2] > 0 else 0
-            wow_odr = w_vals_pct_odr[-1] - w_vals_pct_odr[-2] if len(w_vals_pct_odr) > 1 else 0
-            wow_ptc1 = w_vals_pct_ptc1[-1] - w_vals_pct_ptc1[-2] if len(w_vals_pct_ptc1) > 1 else 0
+        if not weeks_info.empty:
+            weeks_info = weeks_info.sort_values("min_date", ascending=True).reset_index(drop=True)
+            week_cols = weeks_info["min_date"].tolist()
+            week_labels = weeks_info["week_label"].tolist()
         else:
-            sorted_weeks = ["W--"] * 5
-            w_vals_phat = w_vals_ptc = w_vals_pct_odr = w_vals_pct_ptc1 = [0] * 5
-            wow_phat = wow_ptc = wow_odr = wow_ptc1 = 0
+            week_cols, week_labels = [], ["W--"] * 5
 
-        # --- 3. TÍNH DỮ LIỆU THỰC CHO THÁNG (M, M-1, MoM) ---
-        month_df = con.execute(f"""
+        # Query gom dữ liệu ma trận trực tiếp từ DuckDB
+        matrix_df = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_label,
-                COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
-                COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
+                COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
+                COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
+                COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc,
+                CAST(tg_ptc AS DATE) as date_key,
+                CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE) as week_key,
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as month_key,
+                COUNT(DISTINCT ma_phieugui) as sl_phat,
                 COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
-                COUNT(DISTINCT CASE WHEN {lan1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
-                COUNT(DISTINCT CASE WHEN {lan1_expr} THEN ma_phieugui END) as sl_ptc1
-            FROM orders 
-            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
-            GROUP BY 1 ORDER BY 1 DESC LIMIT 2
+                COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) as sl_ptc1,
+                COUNT(DISTINCT CASE WHEN PTC_1 = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
+                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) as sl_inday,
+                COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) as sl_nextday
+            FROM orders
+            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
+            GROUP BY 1, 2, 3, 4, 5, 6
         """).fetchdf()
-
-        if len(month_df) >= 1:
-            m_curr = month_df.iloc[0]
-            m_prev = month_df.iloc[1] if len(month_df) > 1 else m_curr
-
-            m_phat_curr, m_phat_prev = m_curr["sl_phai_phat"], m_prev["sl_phai_phat"]
-            m_ptc_curr, m_ptc_prev = m_curr["sl_ptc"], m_prev["sl_ptc"]
-            
-            m_odr_curr = (m_curr["sl_dung_gio"] / m_curr["sl_phai_phat"] * 100) if m_curr["sl_phai_phat"] > 0 else 0
-            m_odr_prev = (m_prev["sl_dung_gio"] / m_prev["sl_phai_phat"] * 100) if m_prev["sl_phai_phat"] > 0 else 0
-            
-            m_ptc1_curr = (m_curr["sl_ptc1_dung_gio"] / m_curr["sl_ptc1"] * 100) if m_curr["sl_ptc1"] > 0 else 0
-            m_ptc1_prev = (m_prev["sl_ptc1_dung_gio"] / m_prev["sl_ptc1"] * 100) if m_prev["sl_ptc1"] > 0 else 0
-
-            mom_phat = ((m_phat_curr - m_phat_prev) / m_phat_prev * 100) if m_phat_prev > 0 else 0
-            mom_ptc = ((m_ptc_curr - m_ptc_prev) / m_ptc_prev * 100) if m_ptc_prev > 0 else 0
-            mom_odr = m_odr_curr - m_odr_prev
-            mom_ptc1 = m_ptc1_curr - m_ptc1_prev
-        else:
-            m_phat_curr = m_phat_prev = m_ptc_curr = m_ptc_prev = m_odr_curr = m_odr_prev = m_ptc1_curr = m_ptc1_prev = 0
-            mom_phat = mom_ptc = mom_odr = mom_ptc1 = 0
 
         # Hàm helper format class màu xanh/đỏ
         def fmt_diff(val, is_pct_point=False):
@@ -678,91 +626,153 @@ def render(file_id: str):
             unit = "%" if not is_pct_point else ""
             return f'<td class="{color}">{sign}{val:.2f}{unit}</td>'
 
-        # --- 4. TÍNH DỮ LIỆU CÂY ĐỐI TÁC -> TỈNH -> BƯU CỤC ---
-        all_tree_data = con.execute(f"""
-            SELECT 
-                COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt, 
-                COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, 
-                COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, 
-                COUNT(DISTINCT ma_phieugui) as sl
-            FROM orders 
-            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
-            GROUP BY ma_doitac, tinh_phat, ma_buucuc_phat 
-            ORDER BY 1, 2, 4 DESC
-        """).fetchall()
+        # Helper tính toán danh sách giá trị theo danh mục
+        def calc_row_metrics(df_sub):
+            # 7 ngày
+            d_phat = [df_sub[df_sub["date_key"] == d]["sl_phat"].sum() for d in day_cols]
+            d_dg = [df_sub[df_sub["date_key"] == d]["sl_dung_gio"].sum() for d in day_cols]
+            d_p1 = [df_sub[df_sub["date_key"] == d]["sl_ptc1"].sum() for d in day_cols]
+            d_p1g = [df_sub[df_sub["date_key"] == d]["sl_ptc1_dung_gio"].sum() for d in day_cols]
+            d_in = [df_sub[df_sub["date_key"] == d]["sl_inday"].sum() for d in day_cols]
+            d_next = [df_sub[df_sub["date_key"] == d]["sl_nextday"].sum() for d in day_cols]
 
-        tree_struct = {}
-        for dt, tinh, bc, sl in all_tree_data:
-            if dt not in tree_struct: tree_struct[dt] = {'sl': 0, 'tinhs': {}}
-            tree_struct[dt]['sl'] += sl
-            if tinh not in tree_struct[dt]['tinhs']: tree_struct[dt]['tinhs'][tinh] = {'sl': 0, 'bcs': {}}
-            tree_struct[dt]['tinhs'][tinh]['sl'] += sl
-            tree_struct[dt]['tinhs'][tinh]['bcs'][bc] = sl
+            # 5 tuần
+            w_phat = [df_sub[df_sub["week_key"] == w]["sl_phat"].sum() for w in week_cols]
+            w_dg = [df_sub[df_sub["week_key"] == w]["sl_dung_gio"].sum() for w in week_cols]
+            w_p1 = [df_sub[df_sub["week_key"] == w]["sl_ptc1"].sum() for w in week_cols]
+            w_p1g = [df_sub[df_sub["week_key"] == w]["sl_ptc1_dung_gio"].sum() for w in week_cols]
+            w_in = [df_sub[df_sub["week_key"] == w]["sl_inday"].sum() for w in week_cols]
+            w_next = [df_sub[df_sub["week_key"] == w]["sl_nextday"].sum() for w in week_cols]
 
+            # Tháng
+            m_list = sorted(df_sub["month_key"].dropna().unique().tolist(), reverse=True)
+            m_curr_k = m_list[0] if len(m_list) > 0 else ""
+            m_prev_k = m_list[1] if len(m_list) > 1 else m_curr_k
+
+            m_curr_df = df_sub[df_sub["month_key"] == m_curr_k]
+            m_prev_df = df_sub[df_sub["month_key"] == m_prev_k]
+
+            m_phat_c, m_phat_p = m_curr_df["sl_phat"].sum(), m_prev_df["sl_phat"].sum()
+            m_dg_c, m_dg_p = m_curr_df["sl_dung_gio"].sum(), m_prev_df["sl_dung_gio"].sum()
+            m_p1_c, m_p1_p = m_curr_df["sl_ptc1"].sum(), m_prev_df["sl_ptc1"].sum()
+            m_p1g_c, m_p1g_p = m_curr_df["sl_ptc1_dung_gio"].sum(), m_prev_df["sl_ptc1_dung_gio"].sum()
+            m_in_c, m_in_p = m_curr_df["sl_inday"].sum(), m_prev_df["sl_inday"].sum()
+            m_next_c, m_next_p = m_curr_df["sl_nextday"].sum(), m_prev_df["sl_nextday"].sum()
+
+            return {
+                "d_phat": d_phat, "w_phat": w_phat, "m_phat_p": m_phat_p, "m_phat_c": m_phat_c,
+                "d_odr": [(g/p*100) if p>0 else 0 for g,p in zip(d_dg, d_phat)],
+                "w_odr": [(g/p*100) if p>0 else 0 for g,p in zip(w_dg, w_phat)],
+                "m_odr_p": (m_dg_p/m_phat_p*100) if m_phat_p>0 else 0, "m_odr_c": (m_dg_c/m_phat_c*100) if m_phat_c>0 else 0,
+                
+                "d_ptc1": [(g/p*100) if p>0 else 0 for g,p in zip(d_p1g, d_p1)],
+                "w_ptc1": [(g/p*100) if p>0 else 0 for g,p in zip(w_p1g, w_p1)],
+                "m_ptc1_p": (m_p1g_p/m_p1_p*100) if m_p1_p>0 else 0, "m_ptc1_c": (m_p1g_c/m_p1_c*100) if m_p1_c>0 else 0,
+
+                "d_inday": [(i/p*100) if p>0 else 0 for i,p in zip(d_in, d_phat)],
+                "w_inday": [(i/p*100) if p>0 else 0 for i,p in zip(w_in, w_phat)],
+                "m_inday_p": (m_in_p/m_phat_p*100) if m_phat_p>0 else 0, "m_inday_c": (m_in_c/m_phat_c*100) if m_phat_c>0 else 0,
+
+                "d_nextday": [(n/p*100) if p>0 else 0 for n,p in zip(d_next, d_phat)],
+                "w_nextday": [(n/p*100) if p>0 else 0 for n,p in zip(w_next, w_phat)],
+                "m_nextday_p": (m_next_p/m_phat_p*100) if m_phat_p>0 else 0, "m_nextday_c": (m_next_c/m_phat_c*100) if m_phat_c>0 else 0,
+            }
+
+        # Tính tổng dự án
+        root_m = calc_row_metrics(matrix_df)
+
+        dod_phat = ((root_m["d_phat"][-1] - root_m["d_phat"][-2]) / root_m["d_phat"][-2] * 100) if len(root_m["d_phat"]) > 1 and root_m["d_phat"][-2] > 0 else 0
+        wow_phat = ((root_m["w_phat"][-1] - root_m["w_phat"][-2]) / root_m["w_phat"][-2] * 100) if len(root_m["w_phat"]) > 1 and root_m["w_phat"][-2] > 0 else 0
+        mom_phat = ((root_m["m_phat_c"] - root_m["m_phat_p"]) / root_m["m_phat_p"] * 100) if root_m["m_phat_p"] > 0 else 0
+
+        # --- XÂY DỰNG HTML NÚT CÂY ĐỐI TÁC -> TỈNH -> BƯU CỤC ---
         matrix_rows_html = ""
-        for idx_dt, (dt_name, dt_data) in enumerate(tree_struct.items()):
-            dt_sl = dt_data['sl']
+        for idx_dt, dt_name in enumerate(matrix_df["dt"].unique()):
+            df_dt = matrix_df[matrix_df["dt"] == dt_name]
+            dt_m = calc_row_metrics(df_dt)
             dt_clean_id = f"dt_{idx_dt}"
-            d_dt = dt_sl // max(len(d_vals_phat), 1)
-            
+
+            dod_dt = ((dt_m["d_phat"][-1] - dt_m["d_phat"][-2]) / dt_m["d_phat"][-2] * 100) if len(dt_m["d_phat"]) > 1 and dt_m["d_phat"][-2] > 0 else 0
+            wow_dt = ((dt_m["w_phat"][-1] - dt_m["w_phat"][-2]) / dt_m["w_phat"][-2] * 100) if len(dt_m["w_phat"]) > 1 and dt_m["w_phat"][-2] > 0 else 0
+            mom_dt = ((dt_m["m_phat_c"] - dt_m["m_phat_p"]) / dt_m["m_phat_p"] * 100) if dt_m["m_phat_p"] > 0 else 0
+
             matrix_rows_html += f"""
             <tr class="sub-row-1 group_root" style="display:none; background-color: #f4f6f8; font-weight:600;" onclick="toggleRow('{dt_clean_id}', event, 'btn_{dt_clean_id}')">
                 <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{dt_clean_id}">[+]</span> Đối tác: <b>{dt_name}</b></td>
                 <td>-</td><td>-</td>
-                {"".join([f"<td>{d_dt:,.0f}</td>" for _ in d_vals_phat])}
-                {fmt_diff(dod_phat)}
-                {"".join([f"<td>{d_dt*5:,.0f}</td>" for _ in w_vals_phat])}
-                {fmt_diff(wow_phat)}
-                <td>{dt_sl:,.0f}</td><td>{dt_sl:,.0f}</td>
-                {fmt_diff(mom_phat)}
+                {"".join([f"<td>{v:,.0f}</td>" for v in dt_m["d_phat"]])}
+                {fmt_diff(dod_dt)}
+                {"".join([f"<td>{v:,.0f}</td>" for v in dt_m["w_phat"]])}
+                {fmt_diff(wow_dt)}
+                <td>{dt_m["m_phat_p"]:,.0f}</td><td>{dt_m["m_phat_c"]:,.0f}</td>
+                {fmt_diff(mom_dt)}
             </tr>
             """
-            for idx_tinh, (tinh_name, tinh_data) in enumerate(dt_data['tinhs'].items()):
-                tinh_sl = tinh_data['sl']
+
+            for idx_tinh, tinh_name in enumerate(df_dt["tinh"].unique()):
+                df_tinh = df_dt[df_dt["tinh"] == tinh_name]
+                tinh_m = calc_row_metrics(df_tinh)
                 tinh_clean_id = f"{dt_clean_id}_tinh_{idx_tinh}"
-                d_tinh = tinh_sl // max(len(d_vals_phat), 1)
+
+                dod_tinh = ((tinh_m["d_phat"][-1] - tinh_m["d_phat"][-2]) / tinh_m["d_phat"][-2] * 100) if len(tinh_m["d_phat"]) > 1 and tinh_m["d_phat"][-2] > 0 else 0
+                wow_tinh = ((tinh_m["w_phat"][-1] - tinh_m["w_phat"][-2]) / tinh_m["w_phat"][-2] * 100) if len(tinh_m["w_phat"]) > 1 and tinh_m["w_phat"][-2] > 0 else 0
+                mom_tinh = ((tinh_m["m_phat_c"] - tinh_m["m_phat_p"]) / tinh_m["m_phat_p"] * 100) if tinh_m["m_phat_p"] > 0 else 0
 
                 matrix_rows_html += f"""
                 <tr class="sub-row-2 {dt_clean_id}" style="display:none; background-color: #ffffff; color: #1565c0;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
                     <td style="padding-left: 40px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Tỉnh: <b>{tinh_name}</b></td>
                     <td>-</td><td>-</td>
-                    {"".join([f"<td>{d_tinh:,.0f}</td>" for _ in d_vals_phat])}
-                    {fmt_diff(dod_phat)}
-                    {"".join([f"<td>{d_tinh*5:,.0f}</td>" for _ in w_vals_phat])}
-                    {fmt_diff(wow_phat)}
-                    <td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td>
-                    {fmt_diff(mom_phat)}
+                    {"".join([f"<td>{v:,.0f}</td>" for v in tinh_m["d_phat"]])}
+                    {fmt_diff(dod_tinh)}
+                    {"".join([f"<td>{v:,.0f}</td>" for v in tinh_m["w_phat"]])}
+                    {fmt_diff(wow_tinh)}
+                    <td>{tinh_m["m_phat_p"]:,.0f}</td><td>{tinh_m["m_phat_c"]:,.0f}</td>
+                    {fmt_diff(mom_tinh)}
                 </tr>
                 """
-                for bc_name, bc_sl in tinh_data['bcs'].items():
-                    d_bc = bc_sl // max(len(d_vals_phat), 1)
+
+                for bc_name in df_tinh["bc"].unique():
+                    df_bc = df_tinh[df_tinh["bc"] == bc_name]
+                    bc_m = calc_row_metrics(df_bc)
+
+                    dod_bc = ((bc_m["d_phat"][-1] - bc_m["d_phat"][-2]) / bc_m["d_phat"][-2] * 100) if len(bc_m["d_phat"]) > 1 and bc_m["d_phat"][-2] > 0 else 0
+                    wow_bc = ((bc_m["w_phat"][-1] - bc_m["w_phat"][-2]) / bc_m["w_phat"][-2] * 100) if len(bc_m["w_phat"]) > 1 and bc_m["w_phat"][-2] > 0 else 0
+                    mom_bc = ((bc_m["m_phat_c"] - bc_m["m_phat_p"]) / bc_m["m_phat_p"] * 100) if bc_m["m_phat_p"] > 0 else 0
+
                     matrix_rows_html += f"""
                     <tr class="sub-row-3 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
                         <td style="padding-left: 60px;">• Bưu cục: <b>{bc_name}</b></td>
                         <td>-</td><td>-</td>
-                        {"".join([f"<td>{d_bc:,.0f}</td>" for _ in d_vals_phat])}
-                        {fmt_diff(dod_phat)}
-                        {"".join([f"<td>{d_bc*5:,.0f}</td>" for _ in w_vals_phat])}
-                        {fmt_diff(wow_phat)}
-                        <td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td>
-                        {fmt_diff(mom_phat)}
+                        {"".join([f"<td>{v:,.0f}</td>" for v in bc_m["d_phat"]])}
+                        {fmt_diff(dod_bc)}
+                        {"".join([f"<td>{v:,.0f}</td>" for v in bc_m["w_phat"]])}
+                        {fmt_diff(wow_bc)}
+                        <td>{bc_m["m_phat_p"]:,.0f}</td><td>{bc_m["m_phat_c"]:,.0f}</td>
+                        {fmt_diff(mom_bc)}
                     </tr>
                     """
 
-        # Đảm bảo danh sách cột ngày/tuần đủ số lượng hiển thị
-        while len(sorted_days) < 7: sorted_days.insert(0, "--/--")
-        while len(d_vals_phat) < 7: d_vals_phat.insert(0, 0)
-        while len(d_vals_ptc) < 7: d_vals_ptc.insert(0, 0)
-        while len(d_vals_pct_odr) < 7: d_vals_pct_odr.insert(0, 0)
-        while len(d_vals_pct_ptc1) < 7: d_vals_pct_ptc1.insert(0, 0)
+        # Pad danh sách tiêu đề nếu thiếu
+        while len(day_labels) < 7: day_labels.insert(0, "--/--")
+        while len(week_labels) < 5: week_labels.insert(0, "W--")
 
-        while len(sorted_weeks) < 5: sorted_weeks.insert(0, "W--")
-        while len(w_vals_phat) < 5: w_vals_phat.insert(0, 0)
-        while len(w_vals_ptc) < 5: w_vals_ptc.insert(0, 0)
-        while len(w_vals_pct_odr) < 5: w_vals_pct_odr.insert(0, 0)
-        while len(w_vals_pct_ptc1) < 5: w_vals_pct_ptc1.insert(0, 0)
+        dod_odr = root_m["d_odr"][-1] - root_m["d_odr"][-2] if len(root_m["d_odr"]) > 1 else 0
+        wow_odr = root_m["w_odr"][-1] - root_m["w_odr"][-2] if len(root_m["w_odr"]) > 1 else 0
+        mom_odr = root_m["m_odr_c"] - root_m["m_odr_p"]
 
-        # --- 5. RENDER CHUẨN TABLE HTML DỮ LIỆU THỰC ---
+        dod_ptc1 = root_m["d_ptc1"][-1] - root_m["d_ptc1"][-2] if len(root_m["d_ptc1"]) > 1 else 0
+        wow_ptc1 = root_m["w_ptc1"][-1] - root_m["w_ptc1"][-2] if len(root_m["w_ptc1"]) > 1 else 0
+        mom_ptc1 = root_m["m_ptc1_c"] - root_m["m_ptc1_p"]
+
+        dod_in = root_m["d_inday"][-1] - root_m["d_inday"][-2] if len(root_m["d_inday"]) > 1 else 0
+        wow_in = root_m["w_inday"][-1] - root_m["w_inday"][-2] if len(root_m["w_inday"]) > 1 else 0
+        mom_in = root_m["m_inday_c"] - root_m["m_inday_p"]
+
+        dod_next = root_m["d_nextday"][-1] - root_m["d_nextday"][-2] if len(root_m["d_nextday"]) > 1 else 0
+        wow_next = root_m["w_nextday"][-1] - root_m["w_nextday"][-2] if len(root_m["w_nextday"]) > 1 else 0
+        mom_next = root_m["m_nextday_c"] - root_m["m_nextday_p"]
+
+        # --- 2. RENDER TABLE HTML ---
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
@@ -786,8 +796,8 @@ def render(file_id: str):
                     <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
                 </tr>
                 <tr>
-                    {"".join([f"<th>{d}</th>" for d in sorted_days])}<th style="color: #ff5252;">DoD</th>
-                    {"".join([f"<th>{w}</th>" for w in sorted_weeks])}<th style="color: #ff5252;">WoW</th>
+                    {"".join([f"<th>{d}</th>" for d in day_labels])}<th style="color: #ff5252;">DoD</th>
+                    {"".join([f"<th>{w}</th>" for w in week_labels])}<th style="color: #ff5252;">WoW</th>
                     <th>M-1</th><th>M</th><th style="color: #ff5252;">MoM</th>
                 </tr>
             </thead>
@@ -796,50 +806,62 @@ def render(file_id: str):
                 <tr class="row-group" onclick="toggleRow('group_root', event, 'btn_root')">
                     <td><span class="toggle-btn" id="btn_root">[+]</span> <b>Sản lượng phải phát</b></td>
                     <td style="text-align: center;">-</td><td style="text-align: center;">100%</td>
-                    {"".join([f"<td>{v:,.0f}</td>" for v in d_vals_phat])}
+                    {"".join([f"<td>{v:,.0f}</td>" for v in root_m["d_phat"]])}
                     {fmt_diff(dod_phat)}
-                    {"".join([f"<td>{v:,.0f}</td>" for v in w_vals_phat])}
+                    {"".join([f"<td>{v:,.0f}</td>" for v in root_m["w_phat"]])}
                     {fmt_diff(wow_phat)}
-                    <td>{m_phat_prev:,.0f}</td><td><b>{m_phat_curr:,.0f}</b></td>
+                    <td>{root_m["m_phat_p"]:,.0f}</td><td><b>{root_m["m_phat_c"]:,.0f}</b></td>
                     {fmt_diff(mom_phat)}
                 </tr>
 
                 {matrix_rows_html}
 
-                <!-- 2. SẢN LƯỢNG PHÁT THÀNH CÔNG -->
-                <tr class="row-group">
-                    <td><b>Sản lượng phát thành công</b></td>
-                    <td style="text-align: center;">-</td><td style="text-align: center;">98%</td>
-                    {"".join([f"<td>{v:,.0f}</td>" for v in d_vals_ptc])}
-                    {fmt_diff(dod_ptc)}
-                    {"".join([f"<td>{v:,.0f}</td>" for v in w_vals_ptc])}
-                    {fmt_diff(wow_ptc)}
-                    <td>{m_ptc_prev:,.0f}</td><td><b>{m_ptc_curr:,.0f}</b></td>
-                    {fmt_diff(mom_ptc)}
-                </tr>
-
-                <!-- 3. % PHÁT THÀNH CÔNG (ODR) -->
+                <!-- 2. % PHÁT THÀNH CÔNG ĐÚNG GIỜ (ODR) -->
                 <tr>
-                    <td style="font-weight: bold;">% Phát thành công đúng giờ (ODR)</td>
+                    <td style="font-weight: bold;">% Phát thành công đg (ODR)</td>
                     <td style="text-align: center;">99.00</td><td style="text-align: center;">100.00</td>
-                    {"".join([f"<td>{v:.2f}</td>" for v in d_vals_pct_odr])}
+                    {"".join([f"<td>{v:.2f}</td>" for v in root_m["d_odr"]])}
                     {fmt_diff(dod_odr, is_pct_point=True)}
-                    {"".join([f"<td>{v:.2f}</td>" for v in w_vals_pct_odr])}
+                    {"".join([f"<td>{v:.2f}</td>" for v in root_m["w_odr"]])}
                     {fmt_diff(wow_odr, is_pct_point=True)}
-                    <td>{m_odr_prev:.2f}</td><td><b>{m_odr_curr:.2f}</b></td>
+                    <td>{root_m["m_odr_p"]:.2f}</td><td><b>{root_m["m_odr_c"]:.2f}</b></td>
                     {fmt_diff(mom_odr, is_pct_point=True)}
                 </tr>
 
-                <!-- 4. % PHÁT THÀNH CÔNG ĐÚNG GIỜ LẦN 1 -->
+                <!-- 3. % PHÁT THÀNH CÔNG ĐÚNG GIỜ LẦN 1 -->
                 <tr>
                     <td style="font-weight: bold;">% Phát thành công đg lần 1</td>
                     <td style="text-align: center;">98.00</td><td style="text-align: center;">100.00</td>
-                    {"".join([f"<td>{v:.2f}</td>" for v in d_vals_pct_ptc1])}
+                    {"".join([f"<td>{v:.2f}</td>" for v in root_m["d_ptc1"]])}
                     {fmt_diff(dod_ptc1, is_pct_point=True)}
-                    {"".join([f"<td>{v:.2f}</td>" for v in w_vals_pct_ptc1])}
+                    {"".join([f"<td>{v:.2f}</td>" for v in root_m["w_ptc1"]])}
                     {fmt_diff(wow_ptc1, is_pct_point=True)}
-                    <td>{m_ptc1_prev:.2f}</td><td><b>{m_ptc1_curr:.2f}</b></td>
+                    <td>{root_m["m_ptc1_p"]:.2f}</td><td><b>{root_m["m_ptc1_c"]:.2f}</b></td>
                     {fmt_diff(mom_ptc1, is_pct_point=True)}
+                </tr>
+
+                <!-- 4. % PTC IN-DAY -->
+                <tr>
+                    <td style="font-weight: bold;">% PTC in-day</td>
+                    <td style="text-align: center;">80.00</td><td style="text-align: center;">100.00</td>
+                    {"".join([f"<td>{v:.2f}</td>" for v in root_m["d_inday"]])}
+                    {fmt_diff(dod_in, is_pct_point=True)}
+                    {"".join([f"<td>{v:.2f}</td>" for v in root_m["w_inday"]])}
+                    {fmt_diff(wow_in, is_pct_point=True)}
+                    <td>{root_m["m_inday_p"]:.2f}</td><td><b>{root_m["m_inday_c"]:.2f}</b></td>
+                    {fmt_diff(mom_in, is_pct_point=True)}
+                </tr>
+
+                <!-- 5. % PTC NEXT-DAY -->
+                <tr>
+                    <td style="font-weight: bold;">% PTC Next-day</td>
+                    <td style="text-align: center;">20.00</td><td style="text-align: center;">100.00</td>
+                    {"".join([f"<td>{v:.2f}</td>" for v in root_m["d_nextday"]])}
+                    {fmt_diff(dod_next, is_pct_point=True)}
+                    {"".join([f"<td>{v:.2f}</td>" for v in root_m["w_nextday"]])}
+                    {fmt_diff(wow_next, is_pct_point=True)}
+                    <td>{root_m["m_nextday_p"]:.2f}</td><td><b>{root_m["m_nextday_c"]:.2f}</b></td>
+                    {fmt_diff(mom_next, is_pct_point=True)}
                 </tr>
             </tbody>
         </table>
@@ -867,7 +889,7 @@ def render(file_id: str):
             }}
         </script></body></html>
         """
-        components.html(matrix_full_html, height=480, scrolling=True)
+        components.html(matrix_full_html, height=520, scrolling=True)
 
     except Exception as e:
         st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {e}")
