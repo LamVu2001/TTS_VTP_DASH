@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 from datetime import datetime, date
-from data_loader import get_odr_db
+from ..data_loader import get_odr_db
 
 def render(file_id: str):
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
