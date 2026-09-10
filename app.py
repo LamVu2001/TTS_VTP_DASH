@@ -28,7 +28,7 @@ TTS_PHAT_FILE_ID = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"
 DOANHTHU_FILE_ID = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"  # Điền File ID của dữ liệu doanh thu nếu dùng riêng
 
 # Khai báo 2 tab
-tab_doanhthu, tab_odr = st.tabs(["💰 BÁO CÁO DOANH THU","🚚 DASHBOARD ODR"])
+tab_doanhthu, tab_odr = st.tabs(["💰 TAB DOANH THU","🚚 TAB ODR"])
 
 with tab_doanhthu:
     render_doanhthu(DOANHTHU_FILE_ID)
