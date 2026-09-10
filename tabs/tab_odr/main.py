@@ -562,7 +562,7 @@ def render(file_id: str):
 
     st.divider()
 
- # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (KHẮC PHỤC 100% LỖI SỐ BỊ LỌC VÀ LỌN NÚT)
+ # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX LỖI NAMEERROR 'weeks_info')
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
@@ -583,8 +583,8 @@ def render(file_id: str):
             GROUP BY 1 ORDER BY min_date DESC LIMIT 5
         """).fetchdf()
 
-        week_cols = weeks_info["min_date"].tolist()[::-1] if weeks_info is not None and not weeks_info.empty else []
-        week_labels = weeks_info["week_label"].tolist()[::-1] if weeks_info is not None and not weeks_info.empty else ["W--"] * 5
+        week_cols = weeks_df["min_date"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
+        week_labels = weeks_df["week_label"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else ["W--"] * 5
 
         # 2. AGGREGATE DỮ LIỆU BẢNG TỔNG
         df_d = con.execute(f"""
@@ -673,7 +673,7 @@ def render(file_id: str):
         wow_next = v_w_next[-1] - v_w_next[-2] if len(v_w_next)>1 else 0
         mom_next = m_c.get("nextday",0) - m_p.get("nextday",0)
 
-        # 3. TRUY VẤN TOÀN BỘ CÂY DỮ LIỆU ĐỐI TÁC / TỈNH / BƯU CỤC THEO NGÀY & TUẦN (CỰC TỐI ƯU CÂU TỪ DUCKDB)
+        # 3. TRUY VẤN TOÀN BỘ CÂY DỮ LIỆU ĐỐI TÁC / TỈNH / BƯU CỤC THEO NGÀY & TUẦN
         tree_day_df = con.execute(f"""
             SELECT 
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
@@ -696,7 +696,6 @@ def render(file_id: str):
             GROUP BY 1, 2, 3, 4
         """).fetchdf()
 
-        # Áp dụng Map tra cứu chuỗi nhanh
         map_dt_d, map_tinh_d, map_bc_d = {}, {}, {}
         if tree_day_df is not None and not tree_day_df.empty:
             for r in tree_day_df.itertuples():
@@ -717,7 +716,6 @@ def render(file_id: str):
                 map_tinh_w[k_tinh] = map_tinh_w.get(k_tinh, 0) + r.sl
                 map_bc_w[k_bc] = map_bc_w.get(k_bc, 0) + r.sl
 
-        # Lấy cây danh mục duy nhất
         tree_struct_df = con.execute(f"""
             SELECT DISTINCT 
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
@@ -799,7 +797,7 @@ def render(file_id: str):
         while len(day_labels) < 7: day_labels.insert(0, "--/--")
         while len(week_labels) < 5: week_labels.insert(0, "W--")
 
-        # 4. RENDER HTML BẢNG THẬT VÀ NHẢY CHUẨN SỐ 100%
+        # 4. RENDER HTML BẢNG THẬT
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
