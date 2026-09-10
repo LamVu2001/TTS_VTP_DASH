@@ -562,11 +562,11 @@ def render(file_id: str):
 
     st.divider()
 
- # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (KHÔNG GIỚI HẠN TOP - TỐC ĐỘ SIÊU NHANH)
+ # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (ĐÃ CẬP NHẬT CỘT ngay_bat_dau_phai_phat)
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
-        # 1. LẤY MỐC THỜI GIAN NGÀY / TUẦN / THÁNG
+        # 1. LẤY MỐC THỜI GIAN NGÀY / TUẦN
         days_info = con.execute(f"""
             SELECT CAST(tg_ptc AS DATE) as dt, STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
@@ -586,7 +586,7 @@ def render(file_id: str):
         week_cols = weeks_info["min_date"].tolist()[::-1] if not weeks_info.empty else []
         week_labels = weeks_info["week_label"].tolist()[::-1] if not weeks_info.empty else ["W--"] * 5
 
-        # 2. TRUY VẤN TỔNG THỂ CHO 5 CHỈ TIÊU BẢNG TỔNG
+        # 2. AGGREGATE TỔNG THEO NGÀY, TUẦN, THÁNG (ĐÃ SỬA CỘT ngay_bat_dau_phai_phat)
         df_d = con.execute(f"""
             SELECT 
                 CAST(tg_ptc AS DATE) as d_key,
@@ -597,7 +597,7 @@ def render(file_id: str):
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
             GROUP BY 1
-        """).fetchdf().set_index("d_key") if len(day_cols) > 0 else pd.DataFrame()
+        """).fetchdf()
 
         df_w = con.execute(f"""
             SELECT 
@@ -609,7 +609,7 @@ def render(file_id: str):
                 ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
             GROUP BY 1
-        """).fetchdf().set_index("w_key") if len(week_cols) > 0 else pd.DataFrame()
+        """).fetchdf()
 
         df_m = con.execute(f"""
             SELECT 
@@ -617,31 +617,36 @@ def render(file_id: str):
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
                 ROUND(COUNT(DISTINCT CASE WHEN PTC_1 = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END), 0), 2) as ptc1,
-                ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
-                ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
+                ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 0 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as inday,
+                ROUND(COUNT(DISTINCT CASE WHEN DATEDIFF('day', CAST(ngay_bat_dau_phai_phat AS DATE), CAST(tg_ptc AS DATE)) = 1 THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as nextday
             FROM orders WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
             GROUP BY 1 ORDER BY 1 DESC LIMIT 2
         """).fetchdf()
 
-        def g_v(df_in, k, col):
-            if df_in.empty or k not in df_in.index: return 0.0
-            v = df_in.loc[k, col]
-            return float(v) if pd.notnull(v) else 0.0
+        # Tra cứu siêu tốc bằng Python Dictionary
+        dict_d = {row.d_key: row for row in df_d.itertuples()} if not df_d.empty else {}
+        dict_w = {row.w_key: row for row in df_w.itertuples()} if not df_w.empty else {}
 
-        v_d_phat = [g_v(df_d, d, "phat") for d in day_cols]
-        v_d_odr  = [g_v(df_d, d, "odr") for d in day_cols]
-        v_d_ptc1 = [g_v(df_d, d, "ptc1") for d in day_cols]
-        v_d_in   = [g_v(df_d, d, "inday") for d in day_cols]
-        v_d_next = [g_v(df_d, d, "nextday") for d in day_cols]
+        def get_v_fast(d_map, key, field_idx):
+            if key in d_map:
+                val = d_map[key][field_idx]
+                if val is not None and val == val: return float(val)
+            return 0.0
 
-        v_w_phat = [g_v(df_w, w, "phat") for w in week_cols]
-        v_w_odr  = [g_v(df_w, w, "odr") for w in week_cols]
-        v_w_ptc1 = [g_v(df_w, w, "ptc1") for w in week_cols]
-        v_w_in   = [g_v(df_w, w, "inday") for w in week_cols]
-        v_w_next = [g_v(df_w, w, "nextday") for w in week_cols]
+        v_d_phat = [get_v_fast(dict_d, d, 2) for d in day_cols]
+        v_d_odr  = [get_v_fast(dict_d, d, 3) for d in day_cols]
+        v_d_ptc1 = [get_v_fast(dict_d, d, 4) for d in day_cols]
+        v_d_in   = [get_v_fast(dict_d, d, 5) for d in day_cols]
+        v_d_next = [get_v_fast(dict_d, d, 6) for d in day_cols]
 
-        m_c = df_m.iloc[0] if len(df_m) > 0 else {}
-        m_p = df_m.iloc[1] if len(df_m) > 1 else m_c
+        v_w_phat = [get_v_fast(dict_w, w, 2) for w in week_cols]
+        v_w_odr  = [get_v_fast(dict_w, w, 3) for w in week_cols]
+        v_w_ptc1 = [get_v_fast(dict_w, w, 4) for w in week_cols]
+        v_w_in   = [get_v_fast(dict_w, w, 5) for w in week_cols]
+        v_w_next = [get_v_fast(dict_w, w, 6) for w in week_cols]
+
+        m_c = df_m.iloc[0].to_dict() if len(df_m) > 0 else {}
+        m_p = df_m.iloc[1].to_dict() if len(df_m) > 1 else m_c
 
         def fmt_diff(val, is_pct=False):
             color = "text-green" if val >= 0 else "text-red"
@@ -669,7 +674,7 @@ def render(file_id: str):
         wow_next = v_w_next[-1] - v_w_next[-2] if len(v_w_next)>1 else 0
         mom_next = m_c.get("nextday",0) - m_p.get("nextday",0)
 
-        # 3. TRUY VẤN TOÀN BỘ CÂY ĐỐI TÁC -> TỈNH -> BƯU CỤC (CỰC TỐI ƯU CÂU TỪ DUCKDB)
+        # 3. TRUY VẤN TOÀN BỘ DỮ LIỆU CÂY
         all_bc_df = con.execute(f"""
             SELECT 
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
@@ -680,7 +685,6 @@ def render(file_id: str):
             GROUP BY 1, 2, 3 ORDER BY 1, 2, 4 DESC
         """).fetchdf()
 
-        # Build HTML cực nhanh bằng Python dictionary & join
         dt_dict = {}
         for row in all_bc_df.itertuples():
             dt, tinh, bc, sl = row.dt, row.tinh, row.bc, row.sl
@@ -736,7 +740,7 @@ def render(file_id: str):
         while len(day_labels) < 7: day_labels.insert(0, "--/--")
         while len(week_labels) < 5: week_labels.insert(0, "W--")
 
-        # RENDER BẢNG HTML TẢI TỨC THÌ
+        # 4. RENDER BẢNG HTML
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
