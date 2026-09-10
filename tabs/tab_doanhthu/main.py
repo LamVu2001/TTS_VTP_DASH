@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 from datetime import date, datetime  # <-- THÊM DÒNG NÀY VÀO ĐẦU FILE
 
