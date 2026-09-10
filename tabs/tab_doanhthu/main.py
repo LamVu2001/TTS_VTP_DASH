@@ -16,7 +16,7 @@ def render(file_id=None):
     except Exception as e:
         st.error(f"Lỗi kết nối cơ sở dữ liệu: {e}")
         return
-
+    st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
     # ---------------------------------------------------------
     # 1. KHỞI TẠO DỮ LIỆU BỘ LỌC FOR TAB DOANH THU
     # ---------------------------------------------------------
