@@ -1,11 +1,3 @@
-import sys
-from pathlib import Path
-
-# Thêm thư mục gốc (root project) vào sys.path để Python luôn tìm thấy data_loader
-root_dir = Path(__file__).resolve().parent.parent.parent
-if str(root_dir) not in sys.path:
-    sys.path.append(str(root_dir))
-
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
@@ -13,8 +5,8 @@ from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 from datetime import datetime, date
 
-# Import trực tiếp từ gốc dự án
-from data_loader import get_odr_db
+# Import trực tiếp file data_loader.py từ thư mục gốc
+import data_loader
 
 def render(file_id: str):
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
