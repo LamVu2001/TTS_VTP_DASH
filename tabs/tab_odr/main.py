@@ -562,10 +562,13 @@ def render(file_id: str):
 
     st.divider()
 
-    # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH
+   # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH
     st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
 
     try:
+        # Sử dụng cột PTC_1 = 1 theo đúng cấu trúc dữ liệu
+        lan1_expr = "PTC_1 = 1"
+
         # --- 1. TÍNH DỮ LIỆU THỰC CHO 7 NGÀY GẦN NHẤT ---
         days_df = con.execute(f"""
             SELECT 
@@ -574,8 +577,8 @@ def render(file_id: str):
                 COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
                 COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
                 COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
-                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
-                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 THEN ma_phieugui END) as sl_ptc1
+                COUNT(DISTINCT CASE WHEN {lan1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
+                COUNT(DISTINCT CASE WHEN {lan1_expr} THEN ma_phieugui END) as sl_ptc1
             FROM orders 
             WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 7
@@ -588,8 +591,8 @@ def render(file_id: str):
             d_vals_ptc = days_df["sl_ptc"].tolist()
             
             # Tính % ODR & % PTC1 theo ngày
-            d_vals_pct_odr = [(dg / NULLIF(pt, 0) * 100) if pt > 0 else 0 for dg, pt in zip(days_df["sl_dung_gio"], days_df["sl_phai_phat"])]
-            d_vals_pct_ptc1 = [(p1g / NULLIF(p1, 0) * 100) if p1 > 0 else 0 for p1g, p1 in zip(days_df["sl_ptc1_dung_gio"], days_df["sl_ptc1"])]
+            d_vals_pct_odr = [(dg / pt * 100) if pt > 0 else 0 for dg, pt in zip(days_df["sl_dung_gio"], days_df["sl_phai_phat"])]
+            d_vals_pct_ptc1 = [(p1g / p1 * 100) if p1 > 0 else 0 for p1g, p1 in zip(days_df["sl_ptc1_dung_gio"], days_df["sl_ptc1"])]
             
             # Tính DoD (Ngày cuối so với ngày áp cuối)
             dod_phat = ((d_vals_phat[-1] - d_vals_phat[-2]) / d_vals_phat[-2] * 100) if len(d_vals_phat) > 1 and d_vals_phat[-2] > 0 else 0
@@ -601,15 +604,15 @@ def render(file_id: str):
             d_vals_phat = d_vals_ptc = d_vals_pct_odr = d_vals_pct_ptc1 = [0] * 7
             dod_phat = dod_ptc = dod_odr = dod_ptc1 = 0
 
-        # --- 2. TÍNH DỮ LIỆU THỰC CHO 5 TUẦN GẦN NHẤT (WEEK CHỦ NHẬT -> THỨ 7) ---
+        # --- 2. TÍNH DỮ LIỆU THỰC CHO 5 TUẦN GẦN NHẤT ---
         weeks_df = con.execute(f"""
             SELECT 
                 'W' || STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%W') as week_label,
                 COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
                 COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
                 COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
-                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
-                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 THEN ma_phieugui END) as sl_ptc1,
+                COUNT(DISTINCT CASE WHEN {lan1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
+                COUNT(DISTINCT CASE WHEN {lan1_expr} THEN ma_phieugui END) as sl_ptc1,
                 MIN(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)) as min_date
             FROM orders 
             WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
@@ -621,8 +624,8 @@ def render(file_id: str):
             sorted_weeks = weeks_df["week_label"].tolist()
             w_vals_phat = weeks_df["sl_phai_phat"].tolist()
             w_vals_ptc = weeks_df["sl_ptc"].tolist()
-            w_vals_pct_odr = [(dg / NULLIF(pt, 0) * 100) if pt > 0 else 0 for dg, pt in zip(weeks_df["sl_dung_gio"], weeks_df["sl_phai_phat"])]
-            w_vals_pct_ptc1 = [(p1g / NULLIF(p1, 0) * 100) if p1 > 0 else 0 for p1g, p1 in zip(weeks_df["sl_ptc1_dung_gio"], weeks_df["sl_ptc1"])]
+            w_vals_pct_odr = [(dg / pt * 100) if pt > 0 else 0 for dg, pt in zip(weeks_df["sl_dung_gio"], weeks_df["sl_phai_phat"])]
+            w_vals_pct_ptc1 = [(p1g / p1 * 100) if p1 > 0 else 0 for p1g, p1 in zip(weeks_df["sl_ptc1_dung_gio"], weeks_df["sl_ptc1"])]
 
             wow_phat = ((w_vals_phat[-1] - w_vals_phat[-2]) / w_vals_phat[-2] * 100) if len(w_vals_phat) > 1 and w_vals_phat[-2] > 0 else 0
             wow_ptc = ((w_vals_ptc[-1] - w_vals_ptc[-2]) / w_vals_ptc[-2] * 100) if len(w_vals_ptc) > 1 and w_vals_ptc[-2] > 0 else 0
@@ -640,8 +643,8 @@ def render(file_id: str):
                 COUNT(DISTINCT ma_phieugui) as sl_phai_phat,
                 COUNT(DISTINCT CASE WHEN PTC = 1 THEN ma_phieugui END) as sl_ptc,
                 COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_dung_gio,
-                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
-                COUNT(DISTINCT CASE WHEN lan_giao_dau_ptc = 1 THEN ma_phieugui END) as sl_ptc1
+                COUNT(DISTINCT CASE WHEN {lan1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) as sl_ptc1_dung_gio,
+                COUNT(DISTINCT CASE WHEN {lan1_expr} THEN ma_phieugui END) as sl_ptc1
             FROM orders 
             WHERE {where_sql_odr} AND tg_ptc IS NOT NULL 
             GROUP BY 1 ORDER BY 1 DESC LIMIT 2
@@ -870,6 +873,7 @@ def render(file_id: str):
         st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {e}")
 
     st.divider()
+
 
     # # 8. BA BẢNG TỒN KHÂU (FM, MM, LM)
     # ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
