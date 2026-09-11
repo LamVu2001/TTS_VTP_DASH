@@ -967,40 +967,7 @@ def render(file_id: str):
         st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {e}")
 
     st.divider()
-    # =========================================================================
-    # 8. NÚT XUẤT/TẢI XUỐNG DỮ LIỆU ĐÃ LỌC Ở CUỐI TRANG
-    # =========================================================================
-    st.write("")
-    st.markdown('<div style="font-size:18px; font-weight:bold; color:#111; margin-top:20px; margin-bottom:10px;">XUẤT DỮ LIỆU BÁO CÁO</div>', unsafe_allow_html=True)
-
-    try:
-        # Truy vấn toàn bộ dữ liệu chi tiết dựa trên điều kiện lọc hiện tại (where_sql_odr)
-        df_export = con.execute(f"""
-            SELECT * 
-            FROM orders 
-            WHERE {where_sql_odr} AND tg_ptc IS NOT NULL
-        """).fetchdf()
-
-        if not df_export.empty:
-            # Chuyển đổi DataFrame thành định dạng CSV (hoặc Excel nếu dùng thư viện ngoài)
-            csv_data = df_export.to_csv(index=False).encode('utf-8-sig') # Dùng utf-8-sig để hiển thị tiếng Việt chuẩn trong Excel
-
-            col_export1, col_export2 = st.columns([1, 3])
-            with col_export1:
-                st.download_button(
-                    label="📥 TẢI XUỐNG DỮ LIỆU (CSV)",
-                    data=csv_data,
-                    file_name=f"bao_cao_odr_{date.today().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    help="Tải xuống toàn bộ danh sách đơn hàng chi tiết đã được lọc theo các tiêu chí trên giao diện."
-                )
-            with col_export2:
-                st.markdown(f"<p style='padding-top: 8px; color: #555; font-size: 13px;'>📊 Tổng số lượng bản ghi thỏa mãn điều kiện lọc: <b>{len(df_export):,}</b> dòng.</p>", unsafe_allow_html=True)
-        else:
-            st.info("Không có dữ liệu để xuất file với bộ lọc hiện tại.")
-            
-    except Exception as e:
-        st.error(f"Lỗi khi chuẩn bị dữ liệu tải xuống: {e}")
+    
     # # 8. BA BẢNG TỒN KHÂU (FM, MM, LM)
     # ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
 
