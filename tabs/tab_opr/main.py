@@ -277,7 +277,7 @@ def render(file_id: str):
 
     with c_opr_right:
         # 1. TIÊU ĐỀ
-        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
     
         # 2. TRUY VẤN DỮ LIỆU
         query_top_failed = f"""
@@ -325,9 +325,9 @@ def render(file_id: str):
             <thead>
                 <tr style="background-color: #1e1e1e; color: #ffffff;">
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Mã KH</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">SL Thu</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Failed SLA</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Đúng Giờ</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu Failed SLA</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu Đúng Giờ</th>
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ Lệ Thành Công</th>
                 </tr>
             </thead>
