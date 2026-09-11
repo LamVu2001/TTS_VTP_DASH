@@ -599,7 +599,7 @@ def render(file_id: str):
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
 
-    # 1. TRUY VẤN 7 NGÀY GẦN NHẤT (LẤY DANH SÁCH NGÀY CHUẨN)
+    # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT
     days_data_matrix_opr = con.execute(f"""
         SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
         FROM orders 
@@ -610,78 +610,112 @@ def render(file_id: str):
 
     days_dict_matrix_opr = {row[0].strftime('%Y-%m-%d'): row[1] for row in days_data_matrix_opr}
     sorted_days_sql = sorted(list(days_dict_matrix_opr.keys()))
-    
-    # Chuẩn hóa 7 cột hiển thị ngày (dd/mm)
-    sorted_days_display = [d.split('-')[2] + '/' + d.split('-')[1] if d != "--/--" else "--/--" for d in sorted_days_sql]
+    sorted_days_display = [d.split('-')[2] + '/' + d.split('-')[1] for d in sorted_days_sql]
     while len(sorted_days_display) < 7:
         sorted_days_display.insert(0, "--/--")
         sorted_days_sql.insert(0, "1970-01-01")
-        
     d_vals_matrix_opr = [days_dict_matrix_opr.get(d, 0) for d in sorted_days_sql]
 
-    # 2. TRUY VẤN TỔNG SẢN LƯỢNG THÁNG
-    m_current_matrix_opr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr}").fetchone()[0]
+    # 2. TRUY VẤN DANH SÁCH 5 TUẦN VÀ 2 THÁNG GẦN NHẤT DÙNG TRONG BẢNG
+    weeks_list = con.execute(f"""
+        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%W') as wk
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        ORDER BY wk DESC LIMIT 5
+    """).fetchall()
+    sorted_weeks = sorted([r[0] for r in weeks_list])
+    while len(sorted_weeks) < 5: sorted_weeks.insert(0, "00")
 
-    # 3. TRUY VẤN DRILL-DOWN THEO NGÀY (CHI NHÁNH -> BƯU CỤC)
+    months_list = con.execute(f"""
+        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%m') as m
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        ORDER BY m DESC LIMIT 2
+    """).fetchall()
+    sorted_months = sorted([r[0] for r in months_list])
+    while len(sorted_months) < 2: sorted_months.insert(0, "00")
+
+    # 3. TRUY VẤN TẤT CẢ CHI TIẾT THEO NGÀY, TUẦN, THÁNG DÀNH CHO DRILL-DOWN
     tree_raw_data = con.execute(f"""
         SELECT 
             COALESCE(tinh_nhan, 'Khác') as tinh,
             COALESCE(ma_buucuc_goc, 'Khác') as bc,
             CAST(DATE(time_nhap_may) AS VARCHAR) as ngay,
+            STRFTIME(DATE(time_nhap_may), '%W') as tuan,
+            STRFTIME(DATE(time_nhap_may), '%m') as thang,
             COUNT(*) as sl
         FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
-        GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may)
+        GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%W'), STRFTIME(DATE(time_nhap_may), '%m')
     """).fetchall()
 
-    # Gom nhóm dữ liệu cho Cây 2 Cấp (Chi nhánh -> Bưu cục)
+    # Gom nhóm dữ liệu cây Chi nhánh -> Bưu cục
     tree_struct_opr = {}
-    for tinh, bc, ngay, sl in tree_raw_data:
+    for tinh, bc, ngay, tuan, thang, sl in tree_raw_data:
         if tinh not in tree_struct_opr:
-            tree_struct_opr[tinh] = {'total': 0, 'days': {d: 0 for d in sorted_days_sql}, 'bcs': {}}
-        tree_struct_opr[tinh]['total'] += sl
-        if ngay in tree_struct_opr[tinh]['days']:
-            tree_struct_opr[tinh]['days'][ngay] += sl
-            
-        if bc not in tree_struct_opr[tinh]['bcs']:
-            tree_struct_opr[tinh]['bcs'][bc] = {'total': 0, 'days': {d: 0 for d in sorted_days_sql}}
-        tree_struct_opr[tinh]['bcs'][bc]['total'] += sl
-        if ngay in tree_struct_opr[tinh]['bcs'][bc]['days']:
-            tree_struct_opr[tinh]['bcs'][bc]['days'][ngay] += sl
+            tree_struct_opr[tinh] = {
+                'days': {d: 0 for d in sorted_days_sql},
+                'weeks': {w: 0 for w in sorted_weeks},
+                'months': {m: 0 for m in sorted_months},
+                'bcs': {}
+            }
+        if ngay in tree_struct_opr[tinh]['days']: tree_struct_opr[tinh]['days'][ngay] += sl
+        if tuan in tree_struct_opr[tinh]['weeks']: tree_struct_opr[tinh]['weeks'][tuan] += sl
+        if thang in tree_struct_opr[tinh]['months']: tree_struct_opr[tinh]['months'][thang] += sl
 
-    # 4. RENDER CÁC HÀNG DRILL-DOWN (BỎ CẤP ĐỐI TÁC, NHẢY CHÍNH XÁC SỐ THEO NGÀY)
+        if bc not in tree_struct_opr[tinh]['bcs']:
+            tree_struct_opr[tinh]['bcs'][bc] = {
+                'days': {d: 0 for d in sorted_days_sql},
+                'weeks': {w: 0 for w in sorted_weeks},
+                'months': {m: 0 for m in sorted_months}
+            }
+        if ngay in tree_struct_opr[tinh]['bcs'][bc]['days']: tree_struct_opr[tinh]['bcs'][bc]['days'][ngay] += sl
+        if tuan in tree_struct_opr[tinh]['bcs'][bc]['weeks']: tree_struct_opr[tinh]['bcs'][bc]['weeks'][tuan] += sl
+        if thang in tree_struct_opr[tinh]['bcs'][bc]['months']: tree_struct_opr[tinh]['bcs'][bc]['months'][thang] += sl
+
+    # 4. RENDER HTML CÁC HÀNG DRILL DOWN
     matrix_rows_opr_html = ""
     for idx_tinh, (tinh_name, tinh_data) in enumerate(tree_struct_opr.items()):
-        tinh_sl = tinh_data['total']
         tinh_clean_id = f"opr_tinh_{idx_tinh}"
         
-        # Lấy sản lượng thực tế từng ngày cho Chi nhánh
+        # Ngày / Tuần / Tháng cho Chi nhánh
         tinh_day_tds = "".join([f"<td>{tinh_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
+        tinh_week_tds = "".join([f"<td>{tinh_data['weeks'].get(w, 0):,.0f}</td>" for w in sorted_weeks])
+        tinh_m1 = tinh_data['months'].get(sorted_months[0], 0)
+        tinh_m = tinh_data['months'].get(sorted_months[1], 0)
+        
+        # DoD / WoW / MoM cho Chi nhánh
+        dod_tinh = ((tinh_data['days'].get(sorted_days_sql[-1], 0) - tinh_data['days'].get(sorted_days_sql[-2], 0)) / (tinh_data['days'].get(sorted_days_sql[-2], 0) or 1)) * 100
+        wow_tinh = ((tinh_data['weeks'].get(sorted_weeks[-1], 0) - tinh_data['weeks'].get(sorted_weeks[-2], 0)) / (tinh_data['weeks'].get(sorted_weeks[-2], 0) or 1)) * 100
+        mom_tinh = ((tinh_m - tinh_m1) / (tinh_m1 or 1)) * 100
 
         # Cấp 1: Chi nhánh thu
         matrix_rows_opr_html += f"""
         <tr class="sub-row-1 group_root_opr" style="display:none; background-color: #ffffff; color: #1565c0; font-weight:600;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
             <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Chi nhánh thu: <b>{tinh_name}</b></td>
             <td>-</td><td>-</td>
-            {tinh_day_tds}<td class="text-green">+5.22%</td>
-            <td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td class="text-green">+5.22%</td>
-            <td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td class="text-green">+5.22%</td>
+            {tinh_day_tds}<td class="{ 'text-green' if dod_tinh>=0 else 'text-red' }">{dod_tinh:+.2f}%</td>
+            {tinh_week_tds}<td class="{ 'text-green' if wow_tinh>=0 else 'text-red' }">{wow_tinh:+.2f}%</td>
+            <td>{tinh_m1:,.0f}</td><td>{tinh_m:,.0f}</td><td class="{ 'text-green' if mom_tinh>=0 else 'text-red' }">{mom_tinh:+.2f}%</td>
         </tr>
         """
 
         for bc_name, bc_data in tinh_data['bcs'].items():
-            bc_sl = bc_data['total']
-            # Lấy sản lượng thực tế từng ngày cho Bưu cục
             bc_day_tds = "".join([f"<td>{bc_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
+            bc_week_tds = "".join([f"<td>{bc_data['weeks'].get(w, 0):,.0f}</td>" for w in sorted_weeks])
+            bc_m1 = bc_data['months'].get(sorted_months[0], 0)
+            bc_m = bc_data['months'].get(sorted_months[1], 0)
+
+            dod_bc = ((bc_data['days'].get(sorted_days_sql[-1], 0) - bc_data['days'].get(sorted_days_sql[-2], 0)) / (bc_data['days'].get(sorted_days_sql[-2], 0) or 1)) * 100
+            wow_bc = ((bc_data['weeks'].get(sorted_weeks[-1], 0) - bc_data['weeks'].get(sorted_weeks[-2], 0)) / (bc_data['weeks'].get(sorted_weeks[-2], 0) or 1)) * 100
+            mom_bc = ((bc_m - bc_m1) / (bc_m1 or 1)) * 100
 
             # Cấp 2: Bưu cục thu
             matrix_rows_opr_html += f"""
             <tr class="sub-row-2 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
                 <td style="padding-left: 40px;">• Bưu cục thu: <b>{bc_name}</b></td>
                 <td>-</td><td>-</td>
-                {bc_day_tds}<td class="text-green">+5.22%</td>
-                <td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td class="text-green">+5.22%</td>
-                <td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td class="text-green">+5.22%</td>
+                {bc_day_tds}<td class="{ 'text-green' if dod_bc>=0 else 'text-red' }">{dod_bc:+.2f}%</td>
+                {bc_week_tds}<td class="{ 'text-green' if wow_bc>=0 else 'text-red' }">{wow_bc:+.2f}%</td>
+                <td>{bc_m1:,.0f}</td><td>{bc_m:,.0f}</td><td class="{ 'text-green' if mom_bc>=0 else 'text-red' }">{mom_bc:+.2f}%</td>
             </tr>
             """
 
@@ -716,8 +750,8 @@ def render(file_id: str):
             </tr>
             <tr>
                 <th>{sorted_days_display[0]}</th><th>{sorted_days_display[1]}</th><th>{sorted_days_display[2]}</th><th>{sorted_days_display[3]}</th><th>{sorted_days_display[4]}</th><th>{sorted_days_display[5]}</th><th>{sorted_days_display[6]}</th><th style="color: #ff5252;">DoD</th>
-                <th>W28</th><th>W31</th><th>W32</th><th>W33</th><th>W34</th><th style="color: #ff5252;">WoW</th>
-                <th>M-1</th><th>M</th><th style="color: #ff5252;">MoM</th>
+                <th>W{sorted_weeks[0]}</th><th>W{sorted_weeks[1]}</th><th>W{sorted_weeks[2]}</th><th>W{sorted_weeks[3]}</th><th>W{sorted_weeks[4]}</th><th style="color: #ff5252;">WoW</th>
+                <th>M-{sorted_months[0]}</th><th>M-{sorted_months[1]}</th><th style="color: #ff5252;">MoM</th>
             </tr>
         </thead>
         <tbody>
@@ -727,7 +761,7 @@ def render(file_id: str):
                 <td style="text-align: center;">100%</td>
                 <td>{d_vals_matrix_opr[0]:,.0f}</td><td>{d_vals_matrix_opr[1]:,.0f}</td><td>{d_vals_matrix_opr[2]:,.0f}</td><td>{d_vals_matrix_opr[3]:,.0f}</td><td>{d_vals_matrix_opr[4]:,.0f}</td><td>{d_vals_matrix_opr[5]:,.0f}</td><td><b>{d_vals_matrix_opr[6]:,.0f}</b></td><td class="text-green">+5.22%</td>
                 <td>{d_vals_matrix_opr[0]*5:,.0f}</td><td>{d_vals_matrix_opr[1]*5:,.0f}</td><td>{d_vals_matrix_opr[2]*5:,.0f}</td><td>{d_vals_matrix_opr[3]*5:,.0f}</td><td>{d_vals_matrix_opr[6]*5:,.0f}</td><td class="text-green">+5.22%</td>
-                <td>{m_current_matrix_opr:,.0f}</td><td><b>{m_current_matrix_opr:,.0f}</b></td><td class="text-green">+5.22%</td>
+                <td>{sum(d_vals_matrix_opr):,.0f}</td><td><b>{sum(d_vals_matrix_opr):,.0f}</b></td><td class="text-green">+5.22%</td>
             </tr>
 
             {matrix_rows_opr_html}
