@@ -34,11 +34,11 @@ def render(file_id: str):
         vals = ", ".join([f"'{x}'" for x in escaped])
         return f"{column_name} IN ({vals})"
 
-    # 3. HÀM DỰNG MỆNH ĐỀ WHERE CROSS-FILTERING
+    # 3. HÀM DỰNG MỆNH ĐỀ WHERE CROSS-FILTERING (TỐI ƯU TỐC ĐỘ, KHÔNG CAST)
     def build_where(exclude=None):
         conds = ["1=1"]
         
-        # Lọc ngày dùng time_nhap_may
+        # Lọc ngày sử dụng time_nhap_may
         if exclude != "date" and isinstance(st.session_state.opr_date, (list, tuple)) and len(st.session_state.opr_date) == 2:
             d_start, d_end = st.session_state.opr_date
             conds.append(f"time_nhap_may >= '{d_start} 00:00:00' AND time_nhap_may <= '{d_end} 23:59:59'")
@@ -53,7 +53,7 @@ def render(file_id: str):
             c = sql_in_clause("tinh_nhan", st.session_state.opr_tn)
             if c: conds.append(c)
 
-        # Lọc Bưu cục phát (map ma_buucuc_goc)
+        # Lọc Bưu cục phát
         if exclude != "bc" and st.session_state.opr_bc:
             c = sql_in_clause("ma_buucuc_goc", st.session_state.opr_bc)
             if c: conds.append(c)
@@ -63,7 +63,7 @@ def render(file_id: str):
             c = sql_in_clause("ma_dv_viettel", st.session_state.opr_dv)
             if c: conds.append(c)
             
-        # Lọc Trọng lượng
+        # Lọc Trọng lượng trực tiếp từ cột nhom_trong_luong
         if exclude != "tl" and st.session_state.opr_tl:
             c = sql_in_clause("nhom_trong_luong", st.session_state.opr_tl)
             if c: conds.append(c)
@@ -77,7 +77,7 @@ def render(file_id: str):
     dv_opts = [r[0] for r in con.execute(f"SELECT DISTINCT ma_dv_viettel FROM orders WHERE {build_where('dv')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
     tl_opts = [r[0] for r in con.execute(f"SELECT DISTINCT nhom_trong_luong FROM orders WHERE {build_where('tl')} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
 
-    # 5. GIAO DIỆN BỘ LỌC DÀN NGANG (6 CỘT)
+    # 5. GIAO DIỆN BỘ LỌC (6 CỘT DÀN NGANG)
     f_opr1, f_opr2, f_opr3, f_opr4, f_opr5, f_opr6 = st.columns(6)
 
     with f_opr1:
@@ -87,50 +87,75 @@ def render(file_id: str):
     with f_opr3:
         st.multiselect("TỈNH NHẬN", tn_opts, key="opr_tn", placeholder="Tất cả")
     with f_opr4:
-        st.multiselect("BƯU CỤC NHẬN", bc_opts, key="opr_bc", placeholder="Tất cả")
+        st.multiselect("BƯU CỤC PHÁT", bc_opts, key="opr_bc", placeholder="Tất cả")
     with f_opr5:
         st.multiselect("MÃ DỊCH VỤ", dv_opts, key="opr_dv", placeholder="Tất cả")
     with f_opr6:
         st.multiselect("TRỌNG LƯỢNG", tl_opts, key="opr_tl", placeholder="Tất cả")
 
-    # 6. TÍNH TOÁN DỮ LIỆU
+    # 6. TÍNH TOÁN DỮ LIỆU CÁC THẺ KPI
     where_sql_opr = build_where()
     
     try:
-        tong_sl_opr = con.execute(f"SELECT COUNT(DISTINCT ma_phieugui) FROM orders WHERE {where_sql_opr}").fetchone()[0]
-    except Exception:
-        tong_sl_opr = 0
+        query_kpi = f"""
+            SELECT 
+                COUNT(DISTINCT ma_phieugui) AS tong_sl,
+                COUNT(DISTINCT CASE WHEN LOWER(danh_gia) = 'đúng' THEN ma_phieugui END) AS sl_dung,
+                COUNT(DISTINCT CASE WHEN LOWER(danh_gia) = 'sai' THEN ma_phieugui END) AS sl_sai,
+                COUNT(DISTINCT CASE 
+                    WHEN LOWER(danh_gia) = 'đúng' 
+                         AND time_thulan2 IS NULL 
+                         AND time_thulan3 IS NULL 
+                    THEN ma_phieugui 
+                END) AS sl_dung_lan1
+            FROM orders 
+            WHERE {where_sql_opr}
+        """
+        res = con.execute(query_kpi).fetchone()
+        
+        tong_sl = res[0] or 0
+        sl_dung = res[1] or 0
+        sl_sai = res[2] or 0
+        sl_dung_lan1 = res[3] or 0
 
-    sl_hien_thi = tong_sl_opr if tong_sl_opr > 0 else 0
+        ty_le_dung_gio = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0.0
+        ty_le_dung_lan1 = (sl_dung_lan1 / tong_sl * 100) if tong_sl > 0 else 0.0
+
+    except Exception:
+        tong_sl = sl_dung = sl_sai = 0
+        ty_le_dung_gio = ty_le_dung_lan1 = 0.0
 
     st.write("")
 
-    # 7. CSS & METRIC CARDS
+    # 7. CSS & METRIC CARDS (DÀN NGANG 5 CỘT)
     st.markdown("""
         <style>
         .metric-card {
             background-color: #f8f9fa;
             border-radius: 8px;
-            padding: 12px;
+            padding: 12px 8px;
             text-align: center;
             border: 1px solid #e0e0e0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
-        .metric-title { font-size: 11px; font-weight: bold; color: #555; text-transform: uppercase; }
+        .metric-title { font-size: 11px; font-weight: bold; color: #555; text-transform: uppercase; white-space: nowrap; }
         .metric-value { font-size: 20px; font-weight: bold; color: #111; margin: 4px 0; }
         .metric-sub-green { font-size: 11px; color: #2e7d32; font-weight: 500; }
         .metric-sub-red { font-size: 11px; color: #c62828; font-weight: 500; }
         </style>
     """, unsafe_allow_html=True)
 
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4, k5 = st.columns(5)
+
     with k1:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG THU</div><div class="metric-value">{sl_hien_thi:,.0f}</div><div class="metric-sub-green">▲ +6.8% vs Mục tiêu</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG THU</div><div class="metric-value">{tong_sl:,.0f}</div><div class="metric-sub-green">▲ Tổng đơn</div></div>', unsafe_allow_html=True)
     with k2:
-        st.markdown('<div class="metric-card"><div class="metric-title">TỶ LỆ THU TC</div><div class="metric-value">82.4%</div><div class="metric-sub-red">▼ -3.1% vs Mục tiêu</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SL THU ĐÚNG SLA</div><div class="metric-value">{sl_dung:,.0f}</div><div class="metric-sub-green">▲ Đánh giá Đúng</div></div>', unsafe_allow_html=True)
     with k3:
-        st.markdown('<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐG LẦN 1</div><div class="metric-value">82.4%</div><div class="metric-sub-red">▼ -3.1% vs Mục tiêu</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SL THU SAI SLA</div><div class="metric-value">{sl_sai:,.0f}</div><div class="metric-sub-red">▼ Đánh giá Sai</div></div>', unsafe_allow_html=True)
     with k4: 
-        st.markdown('<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐÚNG GIỜ</div><div class="metric-value">82.4%</div><div class="metric-sub-red">▼ -3.1% vs Mục tiêu</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐÚNG GIỜ</div><div class="metric-value">{ty_le_dung_gio:.1f}%</div><div class="metric-sub-green">▲ Đúng / Tổng</div></div>', unsafe_allow_html=True)
+    with k5:
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐG LẦN 1</div><div class="metric-value">{ty_le_dung_lan1:.1f}%</div><div class="metric-sub-green">▲ Đúng Lần 1 / Tổng</div></div>', unsafe_allow_html=True)
 
     st.write("")
