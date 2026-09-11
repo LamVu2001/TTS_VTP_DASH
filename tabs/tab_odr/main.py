@@ -564,7 +564,7 @@ def render(file_id: str):
     st.divider()
 
 # 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX CHỦN LỖI PTC_1 100%)
-    st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">MA TRẬN CHẤT LƯỢNG KHÂU PHÁT</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">CHẤT LƯỢNG KHÂU PHÁT</div>', unsafe_allow_html=True)
 
     try:
         base_where = f"WHERE {where_sql_odr} AND tg_ptc IS NOT NULL" if where_sql_odr else "WHERE tg_ptc IS NOT NULL"
