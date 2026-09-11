@@ -599,17 +599,15 @@ def render(file_id: str):
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
 
-    # 0. XÁC ĐỊNH NGÀY KẾT THÚC (MAX_DT) TỪ FILTER NGÀY HIỆN TẠI
-    max_dt_res = con.execute(f"SELECT MAX(DATE(time_nhap_may)) FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL").fetchone()
-    import datetime
-    if max_dt_res and max_dt_res[0]:
-        max_dt = max_dt_res[0] if isinstance(max_dt_res[0], str) else max_dt_res[0].strftime('%Y-%m-%d')
+    # LẤY TRỰC TIẾP NGÀY KẾT THÚC TỪ SESSION_STATE BỘ LỌC PHÍA TRÊN
+    if isinstance(st.session_state.opr_date, (list, tuple)) and len(st.session_state.opr_date) == 2:
+        max_dt = str(st.session_state.opr_date[1])
     else:
-        max_dt = datetime.date.today().strftime('%Y-%m-%d')
+        max_dt = date.today().strftime('%Y-%m-%d')
 
     max_dt_obj = datetime.datetime.strptime(max_dt, '%Y-%m-%d')
 
-    # Tạo danh sách 7 ngày lùi dần từ max_dt
+    # Tạo danh sách 7 ngày lùi dần từ max_dt của filter
     sorted_days_sql = []
     for i in range(6, -1, -1):
         d_obj = max_dt_obj - datetime.timedelta(days=i)
@@ -619,7 +617,7 @@ def render(file_id: str):
     days_data_matrix_opr = con.execute(f"""
         SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
         FROM orders 
-        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
+        WHERE {build_where('date')} AND time_nhap_may IS NOT NULL 
           AND DATE(time_nhap_may) >= '{sorted_days_sql[0]}'
           AND DATE(time_nhap_may) <= '{sorted_days_sql[-1]}'
         GROUP BY DATE(time_nhap_may)
@@ -639,30 +637,27 @@ def render(file_id: str):
     # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN
     weeks_list = con.execute(f"""
         SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%W') as wk
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
+        FROM orders WHERE {build_where('date')} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
         ORDER BY wk DESC LIMIT 5
     """).fetchall()
     sorted_weeks_raw = sorted([r[0] for r in weeks_list])
     while len(sorted_weeks_raw) < 5: sorted_weeks_raw.insert(0, "00")
 
-    # [SỬA LẠI ĐOẠN NÀY]: Lấy chính xác tháng của max_dt và tháng trước đó dựa vào ngày kết thúc
+    # Xác định đúng Tháng hiện tại và Tháng trước dựa vào max_dt của filter
     cur_m_int = max_dt_obj.month
     cur_y_int = max_dt_obj.year
     
     if cur_m_int == 1:
         prev_m_int = 12
-        prev_y_int = cur_y_int - 1
     else:
         prev_m_int = cur_m_int - 1
-        prev_y_int = cur_y_int
 
-    # Định dạng tháng dạng chuỗi 'MM' (ví dụ: '08', '09') hoặc 'MM/YYYY' nếu muốn rõ năm
     sorted_months = [f"{prev_m_int:02d}", f"{cur_m_int:02d}"]
 
-    # 3. TRUY VẤN TỔNG SẢN LƯỢNG DÒNG GỐC CHO THÁNG HIỆN TẠI (Tính từ đầu tháng đến max_dt)
+    # 3. TRUY VẤN TỔNG SẢN LƯỢNG DÒNG GỐC CHO THÁNG HIỆN TẠI
     m_current_matrix_opr = con.execute(f"""
         SELECT COUNT(*) FROM orders 
-        WHERE {where_sql_opr} 
+        WHERE {build_where('date')} 
           AND time_nhap_may IS NOT NULL 
           AND STRFTIME(DATE(time_nhap_may), '%m') = '{f"{cur_m_int:02d}"}'
           AND STRFTIME(DATE(time_nhap_may), '%Y') = '{cur_y_int}'
@@ -679,7 +674,7 @@ def render(file_id: str):
             STRFTIME(DATE(time_nhap_may), '%m') as thang,
             COUNT(*) as sl
         FROM orders 
-        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
+        WHERE {build_where('date')} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
         GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%W'), STRFTIME(DATE(time_nhap_may), '%m')
     """).fetchall()
 
