@@ -28,6 +28,7 @@ def render(file_id: str):
     if "opr_bc" not in st.session_state: st.session_state.opr_bc = []
     if "opr_dv" not in st.session_state: st.session_state.opr_dv = []
     if "opr_tl" not in st.session_state: st.session_state.opr_tl = []
+    if "opr_ld" not in st.session_state: st.session_state.opr_ld = []  # Thêm session state cho Loại đơn
 
     # 2. HÀM XỬ LÝ SQL IN CLAUSE
     def sql_in_clause(column_name, selected_list):
@@ -70,18 +71,24 @@ def render(file_id: str):
         if exclude != "tl" and st.session_state.opr_tl:
             c = sql_in_clause("nhom_trong_luong", st.session_state.opr_tl)
             if c: conds.append(c)
+
+        # Lọc Loại đơn từ cột loai_don
+        if exclude != "ld" and st.session_state.opr_ld:
+            c = sql_in_clause("loai_don", st.session_state.opr_ld)
+            if c: conds.append(c)
             
         return " AND ".join(conds)
 
-    # 4. DANH SÁCH TÙY CHỌN BỘ LỌC ĐỘNG TỪ DATABASE
+    # 4. DANH SÁCH TÙY CHỌN BỘ LỌC ĐỘNG TỪ DATABASE (CÓ CROSS-FILTERING)
     kh_opts = [r[0] for r in con.execute(f"SELECT DISTINCT ma_khgui FROM orders WHERE {build_where('kh')} AND ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
     tn_opts = [r[0] for r in con.execute(f"SELECT DISTINCT tinh_nhan FROM orders WHERE {build_where('tn')} AND tinh_nhan IS NOT NULL ORDER BY 1").fetchall()]
     bc_opts = [r[0] for r in con.execute(f"SELECT DISTINCT ma_buucuc_goc FROM orders WHERE {build_where('bc')} AND ma_buucuc_goc IS NOT NULL ORDER BY 1").fetchall()]
     dv_opts = [r[0] for r in con.execute(f"SELECT DISTINCT ma_dv_viettel FROM orders WHERE {build_where('dv')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
     tl_opts = [r[0] for r in con.execute(f"SELECT DISTINCT nhom_trong_luong FROM orders WHERE {build_where('tl')} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
+    ld_opts = [r[0] for r in con.execute(f"SELECT DISTINCT loai_don FROM orders WHERE {build_where('ld')} AND loai_don IS NOT NULL ORDER BY 1").fetchall()]
 
-    # 5. GIAO DIỆN BỘ LỌC (6 CỘT DÀN NGANG)
-    f_opr1, f_opr2, f_opr3, f_opr4, f_opr5, f_opr6 = st.columns(6)
+    # 5. GIAO DIỆN BỘ LỌC (7 CỘT DÀN NGANG)
+    f_opr1, f_opr2, f_opr3, f_opr4, f_opr5, f_opr6, f_opr7 = st.columns(7)
 
     with f_opr1:
         st.date_input("NGÀY NHẬP MÁY", key="opr_date")
@@ -95,6 +102,8 @@ def render(file_id: str):
         st.multiselect("MÃ DỊCH VỤ", dv_opts, key="opr_dv", placeholder="Tất cả")
     with f_opr6:
         st.multiselect("TRỌNG LƯỢNG", tl_opts, key="opr_tl", placeholder="Tất cả")
+    with f_opr7:
+        st.multiselect("LOẠI ĐƠN", ld_opts, key="opr_ld", placeholder="Tất cả")
 
     # 6. TÍNH TOÁN DỮ LIỆU CÁC THẺ KPI
     where_sql_opr = build_where()
