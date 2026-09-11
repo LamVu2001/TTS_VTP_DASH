@@ -977,7 +977,7 @@ def render(file_id: str):
                     STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as ngay,
                     COUNT(DISTINCT ma_phieugui) as san_luong
                 FROM orders {base_where}
-                GROUP BY 1, 2, 3,).fetchdf()
+                GROUP BY 1, 2, 3).fetchdf()
 
             if not raw_export_df.empty:
                 pivot_df = raw_export_df.pivot_table(
