@@ -600,7 +600,7 @@ def render(file_id: str):
 
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
-    
+
     # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT (SẢN LƯỢNG)
     days_data_matrix_opr = con.execute(f"""
         SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
@@ -673,7 +673,7 @@ def render(file_id: str):
     wk_cur_tot = w_vals_matrix_opr[-1]
     wow_tot = ((wk_cur_tot - wk_prev_tot) / wk_prev_tot * 100) if wk_prev_tot > 0 else 0.0
     
-    # 4. TRUY VẤN TỶ LỆ CHO DÒNG TỔNG THEO DANH SÁCH ĐÃ CHUẨN HÓA
+    # 4. TRUY VẤN TỶ LỆ CHO DÒNG TỔNG (ĐÃ ĐỒNG BỘ ĐIỀU KIỆN LỌC LINH HOẠT)
     rate_dung_days = []
     rate_dung1_days = []
     for d in sorted_days_sql:
@@ -684,8 +684,24 @@ def render(file_id: str):
         
         tot_d = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}'").fetchone()[0]
         if tot_d > 0:
-            d_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}' AND danh_gia = 'Dung'").fetchone()[0]
-            d_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}' AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL").fetchone()[0]
+            d_dung = con.execute(f"""
+                SELECT COUNT(*) FROM orders 
+                WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}' 
+                  AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
+            """).fetchone()[0]
+            
+            d_dung1 = con.execute(f"""
+                SELECT COUNT(*) FROM orders 
+                WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}' 
+                  AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
+                  AND (time_thulan2 IS NULL OR CAST(time_thulan2 AS VARCHAR) = '' OR CAST(time_thulan2 AS VARCHAR) = 'NaT')
+                  AND (time_thulan3 IS NULL OR CAST(time_thulan3 AS VARCHAR) = '' OR CAST(time_thulan3 AS VARCHAR) = 'NaT')
+            """).fetchone()[0]
+            
             rate_dung_days.append((d_dung / tot_d) * 100)
             rate_dung1_days.append((d_dung1 / tot_d) * 100)
         else:
@@ -702,8 +718,24 @@ def render(file_id: str):
             
         tot_w = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}'").fetchone()[0]
         if tot_w > 0:
-            w_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}' AND danh_gia = 'Dung'").fetchone()[0]
-            w_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}' AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL").fetchone()[0]
+            w_dung = con.execute(f"""
+                SELECT COUNT(*) FROM orders 
+                WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}' 
+                  AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
+            """).fetchone()[0]
+            
+            w_dung1 = con.execute(f"""
+                SELECT COUNT(*) FROM orders 
+                WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}' 
+                  AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
+                  AND (time_thulan2 IS NULL OR CAST(time_thulan2 AS VARCHAR) = '' OR CAST(time_thulan2 AS VARCHAR) = 'NaT')
+                  AND (time_thulan3 IS NULL OR CAST(time_thulan3 AS VARCHAR) = '' OR CAST(time_thulan3 AS VARCHAR) = 'NaT')
+            """).fetchone()[0]
+            
             rate_dung_weeks.append((w_dung / tot_w) * 100)
             rate_dung1_weeks.append((w_dung1 / tot_w) * 100)
         else:
@@ -713,11 +745,11 @@ def render(file_id: str):
     m_prev_tot_sl = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}'").fetchone()[0]
     m_curr_tot_sl = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}'").fetchone()[0]
     
-    m_prev_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}' AND danh_gia = 'Dung'").fetchone()[0]
-    m_curr_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}' AND danh_gia = 'Dung'").fetchone()[0]
+    m_prev_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}' AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%' OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')").fetchone()[0]
+    m_curr_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}' AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%' OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')").fetchone()[0]
     
-    m_prev_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}' AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL").fetchone()[0]
-    m_curr_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}' AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL").fetchone()[0]
+    m_prev_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}' AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%' OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%') AND (time_thulan2 IS NULL OR CAST(time_thulan2 AS VARCHAR) = '' OR CAST(time_thulan2 AS VARCHAR) = 'NaT') AND (time_thulan3 IS NULL OR CAST(time_thulan3 AS VARCHAR) = '' OR CAST(time_thulan3 AS VARCHAR) = 'NaT')").fetchone()[0]
+    m_curr_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}' AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%' OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%') AND (time_thulan2 IS NULL OR CAST(time_thulan2 AS VARCHAR) = '' OR CAST(time_thulan2 AS VARCHAR) = 'NaT') AND (time_thulan3 IS NULL OR CAST(time_thulan3 AS VARCHAR) = '' OR CAST(time_thulan3 AS VARCHAR) = 'NaT')").fetchone()[0]
     
     rate_dung_m_prev = (m_prev_dung / m_prev_tot_sl * 100) if m_prev_tot_sl > 0 else 0.0
     rate_dung_m_curr = (m_curr_dung / m_curr_tot_sl * 100) if m_curr_tot_sl > 0 else 0.0
