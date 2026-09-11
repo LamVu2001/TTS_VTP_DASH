@@ -563,7 +563,7 @@ def render(file_id: str):
 
     st.divider()
 
-# 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (FIX CHỦN LỖI PTC_1 100%)
+# 7. BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (ĐÃ ĐỔI TUẦN THEO %U - BẮT ĐẦU TỪ CHỦ NHẬT)
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">CHẤT LƯỢNG KHÂU PHÁT</div>', unsafe_allow_html=True)
 
     try:
@@ -581,10 +581,11 @@ def render(file_id: str):
         day_cols = days_df["dt"].tolist()[::-1] if days_df is not None and not days_df.empty else []
         day_labels = days_df["dt_label"].tolist()[::-1] if days_df is not None and not days_df.empty else []
 
+        # Đổi cách lấy tuần sang chuẩn %U (Tuần bắt đầu từ Chủ Nhật)
         weeks_df = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as min_date,
-                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%U') as week_label
+                STRFTIME(CAST(tg_ptc AS DATE), '%U') as min_date,
+                'W' || STRFTIME(CAST(tg_ptc AS DATE), '%U') as week_label
             FROM orders {base_where}
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 5
         """).fetchdf()
@@ -619,7 +620,7 @@ def render(file_id: str):
 
         df_w = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key,
+                STRFTIME(CAST(tg_ptc AS DATE), '%U') as w_key,
                 COUNT(DISTINCT ma_phieugui) as phat,
                 ROUND(COUNT(DISTINCT CASE WHEN danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as odr,
                 ROUND(COUNT(DISTINCT CASE WHEN {sql_ptc1_expr} AND danh_gia_giao_hang = 'Giao đúng giờ' THEN ma_phieugui END) * 100.0 / NULLIF(COUNT(DISTINCT ma_phieugui), 0), 2) as ptc1,
@@ -713,7 +714,7 @@ def render(file_id: str):
                 COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as dt,
                 COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
                 COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc,
-                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key,
+                STRFTIME(CAST(tg_ptc AS DATE), '%U') as w_key,
                 COUNT(DISTINCT ma_phieugui) as sl
             FROM orders {base_where}
             GROUP BY 1, 2, 3, 4
