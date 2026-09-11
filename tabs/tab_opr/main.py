@@ -365,7 +365,7 @@ def render(file_id: str):
     
     # 4. DANH SÁCH CHI NHÁNH & BƯU CỤC THỰC HIỆN
     st.markdown(
-        '<p class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC THU (BẤM CHỌN DÒNG CHI NHÁNH BÊN TRÁI ĐỂ LỌC BƯU CỤC BÊN PHẢI)</p>',
+        '<p style="font-size:20px;class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC THU</p>',
         unsafe_allow_html=True
     )
     
