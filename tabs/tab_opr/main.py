@@ -609,13 +609,13 @@ def render(file_id: str):
 
     max_dt_obj = datetime.datetime.strptime(max_dt, '%Y-%m-%d')
 
-    # Tạo danh sách 7 ngày lùi dần từ max_dt (ngày mới nhất nằm ở cột cuối cùng sát DoD)
+    # Tạo danh sách 7 ngày lùi dần từ max_dt
     sorted_days_sql = []
     for i in range(6, -1, -1):
         d_obj = max_dt_obj - datetime.timedelta(days=i)
         sorted_days_sql.append(d_obj.strftime('%Y-%m-%d'))
 
-    # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT THEO MỐC ĐÃ TÍNH
+    # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT
     days_data_matrix_opr = con.execute(f"""
         SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
         FROM orders 
@@ -636,7 +636,7 @@ def render(file_id: str):
 
     d_vals_matrix_opr = [days_dict_matrix_opr.get(d, 0) for d in sorted_days_sql]
 
-    # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN VÀ 2 THÁNG
+    # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN
     weeks_list = con.execute(f"""
         SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%W') as wk
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
@@ -645,23 +645,29 @@ def render(file_id: str):
     sorted_weeks_raw = sorted([r[0] for r in weeks_list])
     while len(sorted_weeks_raw) < 5: sorted_weeks_raw.insert(0, "00")
 
-    months_list = con.execute(f"""
-        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%m') as m
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
-        ORDER BY m DESC LIMIT 2
-    """).fetchall()
+    # [SỬA LẠI ĐOẠN NÀY]: Lấy chính xác tháng của max_dt và tháng trước đó dựa vào ngày kết thúc
+    cur_m_int = max_dt_obj.month
+    cur_y_int = max_dt_obj.year
     
-    raw_months = [r[0] for r in months_list]
-    if len(raw_months) == 1:
-        cur_m_int = int(raw_months[0])
-        prev_m_int = 12 if cur_m_int == 1 else cur_m_int - 1
-        sorted_months = [f"{prev_m_int:02d}", raw_months[0]]
+    if cur_m_int == 1:
+        prev_m_int = 12
+        prev_y_int = cur_y_int - 1
     else:
-        sorted_months = sorted(raw_months)
-        while len(sorted_months) < 2: sorted_months.insert(0, "00")
+        prev_m_int = cur_m_int - 1
+        prev_y_int = cur_y_int
 
-    # 3. TRUY VẤN TỔNG SẢN LƯỢNG DÒNG GỐC CHO THÁNG
-    m_current_matrix_opr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND DATE(time_nhap_may) <= '{max_dt}'").fetchone()[0]
+    # Định dạng tháng dạng chuỗi 'MM' (ví dụ: '08', '09') hoặc 'MM/YYYY' nếu muốn rõ năm
+    sorted_months = [f"{prev_m_int:02d}", f"{cur_m_int:02d}"]
+
+    # 3. TRUY VẤN TỔNG SẢN LƯỢNG DÒNG GỐC CHO THÁNG HIỆN TẠI (Tính từ đầu tháng đến max_dt)
+    m_current_matrix_opr = con.execute(f"""
+        SELECT COUNT(*) FROM orders 
+        WHERE {where_sql_opr} 
+          AND time_nhap_may IS NOT NULL 
+          AND STRFTIME(DATE(time_nhap_may), '%m') = '{f"{cur_m_int:02d}"}'
+          AND STRFTIME(DATE(time_nhap_may), '%Y') = '{cur_y_int}'
+          AND DATE(time_nhap_may) <= '{max_dt}'
+    """).fetchone()[0]
     
     # 4. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC)
     tree_raw_data = con.execute(f"""
@@ -792,7 +798,7 @@ def render(file_id: str):
                 <td><span class="toggle-btn" id="btn_root_opr">[+]</span> <b>Sản lượng phải thu</b></td>
                 <td>{d_vals_matrix_opr[0]:,.0f}</td><td>{d_vals_matrix_opr[1]:,.0f}</td><td>{d_vals_matrix_opr[2]:,.0f}</td><td>{d_vals_matrix_opr[3]:,.0f}</td><td>{d_vals_matrix_opr[4]:,.0f}</td><td>{d_vals_matrix_opr[5]:,.0f}</td><td><b>{d_vals_matrix_opr[6]:,.0f}</b></td><td class="text-green">+5.22%</td>
                 <td>{d_vals_matrix_opr[0]*5:,.0f}</td><td>{d_vals_matrix_opr[1]*5:,.0f}</td><td>{d_vals_matrix_opr[2]*5:,.0f}</td><td>{d_vals_matrix_opr[3]*5:,.0f}</td><td>{d_vals_matrix_opr[6]*5:,.0f}</td><td class="text-green">+5.22%</td>
-                <td>{m_current_matrix_opr:,.0f}</td><td><b>{m_current_matrix_opr:,.0f}</b></td><td class="text-green">+5.22%</td>
+                <td>{tree_struct_opr.get(list(tree_struct_opr.keys())[0], {}).get('months', {}).get(sorted_months[0], 0):,.0f}</td><td><b>{m_current_matrix_opr:,.0f}</b></td><td class="text-green">+5.22%</td>
             </tr>
 
             {matrix_rows_opr_html}
