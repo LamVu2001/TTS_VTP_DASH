@@ -369,10 +369,10 @@ def render(file_id: str):
         unsafe_allow_html=True
     )
     
-    # 1. TRUY VẤN DỮ LIỆU CHI NHÁNH (tinh_phat)
+    # 1. TRUY VẤN DỮ LIỆU CHI NHÁNH (tinh_thu)
     cn_data_raw = con.execute(f"""
         SELECT 
-            tinh_phat AS cn,
+            tinh_thu AS cn,
             COUNT(DISTINCT ma_phieugui) AS tong_sl,
             COUNT(DISTINCT CASE 
                 WHEN LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
@@ -389,16 +389,16 @@ def render(file_id: str):
                 THEN ma_phieugui 
             END) AS sl_dung
         FROM orders 
-        WHERE {where_sql_opr} AND tinh_phat IS NOT NULL AND tinh_phat != ''
-        GROUP BY tinh_phat 
-        ORDER BY tinh_phat ASC
+        WHERE {where_sql_opr} AND tinh_thu IS NOT NULL AND tinh_thu != ''
+        GROUP BY tinh_thu 
+        ORDER BY tinh_thu ASC
     """).fetchall()
     
-    # 2. TRUY VẤN DỮ LIỆU BƯU CỤC (ma_buucuc_phat)
+    # 2. TRUY VẤN DỮ LIỆU BƯU CỤC (ma_buucuc_goc + tinh_thu)
     bc_data_raw = con.execute(f"""
         SELECT 
-            ma_buucuc_phat AS bc, 
-            tinh_phat AS cn,
+            ma_buucuc_goc AS bc, 
+            tinh_thu AS cn,
             COUNT(DISTINCT ma_phieugui) AS tong_sl,
             COUNT(DISTINCT CASE 
                 WHEN LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
@@ -415,9 +415,9 @@ def render(file_id: str):
                 THEN ma_phieugui 
             END) AS sl_dung
         FROM orders 
-        WHERE {where_sql_opr} AND tinh_phat IS NOT NULL AND ma_buucuc_phat IS NOT NULL
-        GROUP BY ma_buucuc_phat, tinh_phat 
-        ORDER BY ma_buucuc_phat ASC
+        WHERE {where_sql_opr} AND tinh_thu IS NOT NULL AND ma_buucuc_goc IS NOT NULL
+        GROUP BY ma_buucuc_goc, tinh_thu 
+        ORDER BY ma_buucuc_goc ASC
     """).fetchall()
     
     # 3. RENDER HÀNG DỮ LIỆU CHI NHÁNH
@@ -437,7 +437,7 @@ def render(file_id: str):
     <td style="font-weight: bold; color: #2e7d32;">{ty_le_dung:.1f}%</td>
     </tr>"""
     
-    # 4. RENDER HÀNG DỮ LIỆU BƯU CỤC
+    # 4. RENDER HÀNG DỮ LIỆU BƯU CỤC (Đổi vị trí Chi nhánh lên trước, Bưu cục ra sau)
     rows_bc_html = ""
     for item in bc_data_raw:
         bc_code = item[0]
@@ -448,8 +448,8 @@ def render(file_id: str):
         ty_le_dung = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0
     
         rows_bc_html += f"""<tr class="bc-row" data-cn="{cn_code}">
-    <td style="font-weight: bold;">{bc_code}</td>
     <td style="font-weight: bold;">{cn_code}</td>
+    <td style="font-weight: bold;">{bc_code}</td>
     <td>{tong_sl:,.0f}</td>
     <td class="text-red">{sl_failed:,.0f}</td>
     <td>{sl_dung:,.0f}</td>
@@ -544,8 +544,8 @@ def render(file_id: str):
                 <table>
                     <thead>
                         <tr>
-                            <th>Bưu cục</th>
                             <th>Chi nhánh</th>
+                            <th>Bưu cục</th>
                             <th>SL Thu</th>
                             <th>SL Thu Failed</th>
                             <th>SL Thu Đúng Giờ</th>
