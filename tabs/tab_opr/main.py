@@ -631,9 +631,9 @@ def render(file_id: str):
     day_cur_tot = d_vals_matrix_opr[-1]
     dod_tot = ((day_cur_tot - day_prev_tot) / day_prev_tot * 100) if day_prev_tot > 0 else 0.0
     
-    # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN VÀ 2 THÁNG
+    # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN VÀ 2 THÁNG (ĐÃ SỬA %W THÀNH %U - TUẦN BẮT ĐẦU TỪ CHỦ NHẬT)
     weeks_list = con.execute(f"""
-        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%W') as wk
+        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%U') as wk
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
         ORDER BY wk DESC LIMIT 5
     """).fetchall()
@@ -671,7 +671,7 @@ def render(file_id: str):
     mom_tot = ((m_current_matrix_opr - m_prev_matrix_opr) / m_prev_matrix_opr * 100) if m_prev_matrix_opr > 0 else 0.0
     
     weeks_data_sql = con.execute(f"""
-        SELECT STRFTIME(DATE(time_nhap_may), '%W') as wk, COUNT(*) as sl
+        SELECT STRFTIME(DATE(time_nhap_may), '%U') as wk, COUNT(*) as sl
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
         GROUP BY wk
     """).fetchall()
@@ -697,16 +697,16 @@ def render(file_id: str):
                 SELECT COUNT(*) FROM orders 
                 WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}' 
                   AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
-                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
-                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
+                        OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                        OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
             """).fetchone()[0]
             
             d_dung1 = con.execute(f"""
                 SELECT COUNT(*) FROM orders 
                 WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}' 
                   AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
-                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
-                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
+                        OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                        OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
                   AND (time_thulan2 IS NULL OR CAST(time_thulan2 AS VARCHAR) = '' OR CAST(time_thulan2 AS VARCHAR) = 'NaT')
                   AND (time_thulan3 IS NULL OR CAST(time_thulan3 AS VARCHAR) = '' OR CAST(time_thulan3 AS VARCHAR) = 'NaT')
             """).fetchone()[0]
@@ -724,23 +724,23 @@ def render(file_id: str):
             rate_dung_weeks.append(0.0)
             rate_dung1_weeks.append(0.0)
             continue
-            
-        tot_w = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}'").fetchone()[0]
+        
+        tot_w = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%U') = '{w}'").fetchone()[0]
         if tot_w > 0:
             w_dung = con.execute(f"""
                 SELECT COUNT(*) FROM orders 
-                WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}' 
+                WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%U') = '{w}' 
                   AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
-                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
-                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
+                        OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                        OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
             """).fetchone()[0]
             
             w_dung1 = con.execute(f"""
                 SELECT COUNT(*) FROM orders 
-                WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}' 
+                WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%U') = '{w}' 
                   AND (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
-                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
-                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
+                        OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                        OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%')
                   AND (time_thulan2 IS NULL OR CAST(time_thulan2 AS VARCHAR) = '' OR CAST(time_thulan2 AS VARCHAR) = 'NaT')
                   AND (time_thulan3 IS NULL OR CAST(time_thulan3 AS VARCHAR) = '' OR CAST(time_thulan3 AS VARCHAR) = 'NaT')
             """).fetchone()[0]
@@ -772,12 +772,12 @@ def render(file_id: str):
             COALESCE(tinh_nhan, 'Khác') as tinh,
             COALESCE(ma_buucuc_goc, 'Khác') as bc,
             CAST(DATE(time_nhap_may) AS VARCHAR) as ngay,
-            STRFTIME(DATE(time_nhap_may), '%W') as tuan,
+            STRFTIME(DATE(time_nhap_may), '%U') as tuan,
             STRFTIME(DATE(time_nhap_may), '%m') as thang,
             COUNT(DISTINCT ma_phieugui) as sl
         FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
-        GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%W'), STRFTIME(DATE(time_nhap_may), '%m')
+        GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%U'), STRFTIME(DATE(time_nhap_may), '%m')
     """).fetchall()
     
     tree_struct_opr = {}
@@ -804,7 +804,7 @@ def render(file_id: str):
         if tuan in bc_node['weeks']: bc_node['weeks'][tuan] += sl
         if thang in bc_node['months']: bc_node['months'][thang] += sl
     
-    # 6. RENDER HÀNG DRILL DOWN (ĐÃ BỎ HOÀN TOÀN 2 DÒNG TỶ LỆ Ở CHI NHÁNH)
+    # 6. RENDER HÀNG DRILL DOWN
     matrix_rows_opr_html = ""
     for idx_tinh, (tinh_name, t_data) in enumerate(tree_struct_opr.items()):
         tinh_clean_id = f"opr_tinh_{idx_tinh}"
