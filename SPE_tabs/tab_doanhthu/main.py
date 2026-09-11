@@ -141,7 +141,7 @@ def render(file_id=None):
 
         try:
             if time_view_dt == "Tuần":
-                date_expr_dt = "CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)"
+                date_expr_dt = "CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE)"
                 date_format_dt = "%d/%m/%Y"
             elif time_view_dt == "Tháng":
                 date_expr_dt = "DATE_TRUNC('month', CAST(tg_ptc AS DATE))"
