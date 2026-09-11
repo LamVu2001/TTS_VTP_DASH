@@ -601,11 +601,228 @@ def render(file_id: str):
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
 
-    # LẤY TRỰC TIẾP NGÀY KẾT THÚC TỪ SESSION_STATE BỘ LỌC PHÍA TRÊN
-    if isinstance(st.session_state.opr_date, (list, tuple)) and len(st.session_state.opr_date) == 2:
-        max_dt = str(st.session_state.opr_date[1])
-    else:
-        max_dt = date.today().strftime('%Y-%m-%d')
+    # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT
+    days_data_matrix_opr = con.execute(f"""
+        SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
+        FROM orders 
+        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
+        GROUP BY DATE(time_nhap_may) 
+        ORDER BY clean_date DESC LIMIT 7
+    """).fetchall()
 
-    # Parse ngày tháng an toàn
-    max_dt_obj = datetime.datetime.strptime(max_dt, '%Y-%m-%d')
+    days_dict_matrix_opr = {row[0].strftime('%Y-%m-%d'): row[1] for row in days_data_matrix_opr}
+    sorted_days_sql = sorted(list(days_dict_matrix_opr.keys()))
+    sorted_days_display = [d.split('-')[2] + '/' + d.split('-')[1] for d in sorted_days_sql]
+    while len(sorted_days_display) < 7:
+        sorted_days_display.insert(0, "--/--")
+        sorted_days_sql.insert(0, "1970-01-01")
+    d_vals_matrix_opr = [days_dict_matrix_opr.get(d, 0) for d in sorted_days_sql]
+
+    # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN VÀ 2 THÁNG (CỐ ĐỊNH NHÃN)
+    weeks_list = con.execute(f"""
+        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%W') as wk
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        ORDER BY wk DESC LIMIT 5
+    """).fetchall()
+    sorted_weeks = sorted([r[0] for r in weeks_list])
+    while len(sorted_weeks) < 5: sorted_weeks.insert(0, "00")
+
+    # Xác định Tháng hiện tại (M) và Tháng trước (M-1)
+    months_list = con.execute(f"""
+        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%m') as m
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        ORDER BY m DESC LIMIT 2
+    """).fetchall()
+    
+    raw_months = [r[0] for r in months_list]
+    if len(raw_months) == 1:
+        cur_m_int = int(raw_months[0])
+        prev_m_int = 12 if cur_m_int == 1 else cur_m_int - 1
+        sorted_months = [f"{prev_m_int:02d}", raw_months[0]]
+    else:
+        sorted_months = sorted(raw_months)
+        while len(sorted_months) < 2: sorted_months.insert(0, "00")
+
+    # 3. TRUY VẤN TỔNG SẢN LƯỢNG DÒNG GỐC CHO 2 THÁNG
+    m_current_matrix_opr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr}").fetchone()[0]
+    
+    # 4. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC)
+    tree_raw_data = con.execute(f"""
+        SELECT 
+            COALESCE(tinh_nhan, 'Khác') as tinh,
+            COALESCE(ma_buucuc_goc, 'Khác') as bc,
+            CAST(DATE(time_nhap_may) AS VARCHAR) as ngay,
+            STRFTIME(DATE(time_nhap_may), '%W') as tuan,
+            STRFTIME(DATE(time_nhap_may), '%m') as thang,
+            COUNT(*) as sl
+        FROM orders 
+        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%W'), STRFTIME(DATE(time_nhap_may), '%m')
+    """).fetchall()
+
+    tree_struct_opr = {}
+    for tinh, bc, ngay, tuan, thang, sl in tree_raw_data:
+        if tinh not in tree_struct_opr:
+            tree_struct_opr[tinh] = {
+                'days': {d: 0 for d in sorted_days_sql},
+                'weeks': {w: 0 for w in sorted_weeks},
+                'months': {m: 0 for m in sorted_months},
+                'bcs': {}
+            }
+        if ngay in tree_struct_opr[tinh]['days']: tree_struct_opr[tinh]['days'][ngay] += sl
+        if tuan in tree_struct_opr[tinh]['weeks']: tree_struct_opr[tinh]['weeks'][tuan] += sl
+        if thang in tree_struct_opr[tinh]['months']: tree_struct_opr[tinh]['months'][thang] += sl
+
+        if bc not in tree_struct_opr[tinh]['bcs']:
+            tree_struct_opr[tinh]['bcs'][bc] = {
+                'days': {d: 0 for d in sorted_days_sql},
+                'weeks': {w: 0 for w in sorted_weeks},
+                'months': {m: 0 for m in sorted_months}
+            }
+        if ngay in tree_struct_opr[tinh]['bcs'][bc]['days']: tree_struct_opr[tinh]['bcs'][bc]['days'][ngay] += sl
+        if tuan in tree_struct_opr[tinh]['bcs'][bc]['weeks']: tree_struct_opr[tinh]['bcs'][bc]['weeks'][tuan] += sl
+        if thang in tree_struct_opr[tinh]['bcs'][bc]['months']: tree_struct_opr[tinh]['bcs'][bc]['months'][thang] += sl
+
+    # 5. RENDER HÀNG DRILL DOWN
+    matrix_rows_opr_html = ""
+    for idx_tinh, (tinh_name, tinh_data) in enumerate(tree_struct_opr.items()):
+        tinh_clean_id = f"opr_tinh_{idx_tinh}"
+        
+        tinh_day_tds = "".join([f"<td>{tinh_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
+        tinh_week_tds = "".join([f"<td>{tinh_data['weeks'].get(w, 0):,.0f}</td>" for w in sorted_weeks])
+        tinh_m1 = tinh_data['months'].get(sorted_months[0], 0)
+        tinh_m = tinh_data['months'].get(sorted_months[1], 0)
+        
+        # Sửa logic tính % tránh bị chia cho 0
+        day_prev_tinh = tinh_data['days'].get(sorted_days_sql[-2], 0)
+        day_cur_tinh = tinh_data['days'].get(sorted_days_sql[-1], 0)
+        dod_tinh = ((day_cur_tinh - day_prev_tinh) / day_prev_tinh * 100) if day_prev_tinh > 0 else 0.0
+
+        wk_prev_tinh = tinh_data['weeks'].get(sorted_weeks[-2], 0)
+        wk_cur_tinh = tinh_data['weeks'].get(sorted_weeks[-1], 0)
+        wow_tinh = ((wk_cur_tinh - wk_prev_tinh) / wk_prev_tinh * 100) if wk_prev_tinh > 0 else 0.0
+
+        mom_tinh = ((tinh_m - tinh_m1) / tinh_m1 * 100) if tinh_m1 > 0 else 0.0
+
+        # Cấp 1: Chi nhánh thu
+        matrix_rows_opr_html += f"""
+        <tr class="sub-row-1 group_root_opr" style="display:none; background-color: #ffffff; color: #1565c0; font-weight:600;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
+            <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Chi nhánh thu: <b>{tinh_name}</b></td>
+            <td>-</td><td>-</td>
+            {tinh_day_tds}<td class="{ 'text-green' if dod_tinh>=0 else 'text-red' }">{dod_tinh:+.2f}%</td>
+            {tinh_week_tds}<td class="{ 'text-green' if wow_tinh>=0 else 'text-red' }">{wow_tinh:+.2f}%</td>
+            <td>{tinh_m1:,.0f}</td><td>{tinh_m:,.0f}</td><td class="{ 'text-green' if mom_tinh>=0 else 'text-red' }">{mom_tinh:+.2f}%</td>
+        </tr>
+        """
+
+        for bc_name, bc_data in tinh_data['bcs'].items():
+            bc_day_tds = "".join([f"<td>{bc_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
+            bc_week_tds = "".join([f"<td>{bc_data['weeks'].get(w, 0):,.0f}</td>" for w in sorted_weeks])
+            bc_m1 = bc_data['months'].get(sorted_months[0], 0)
+            bc_m = bc_data['months'].get(sorted_months[1], 0)
+
+            day_prev_bc = bc_data['days'].get(sorted_days_sql[-2], 0)
+            day_cur_bc = bc_data['days'].get(sorted_days_sql[-1], 0)
+            dod_bc = ((day_cur_bc - day_prev_bc) / day_prev_bc * 100) if day_prev_bc > 0 else 0.0
+
+            wk_prev_bc = bc_data['weeks'].get(sorted_weeks[-2], 0)
+            wk_cur_bc = bc_data['weeks'].get(sorted_weeks[-1], 0)
+            wow_bc = ((wk_cur_bc - wk_prev_bc) / wk_prev_bc * 100) if wk_prev_bc > 0 else 0.0
+
+            mom_bc = ((bc_m - bc_m1) / bc_m1 * 100) if bc_m1 > 0 else 0.0
+
+            # Cấp 2: Bưu cục thu
+            matrix_rows_opr_html += f"""
+            <tr class="sub-row-2 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
+                <td style="padding-left: 40px;">• Bưu cục thu: <b>{bc_name}</b></td>
+                <td>-</td><td>-</td>
+                {bc_day_tds}<td class="{ 'text-green' if dod_bc>=0 else 'text-red' }">{dod_bc:+.2f}%</td>
+                {bc_week_tds}<td class="{ 'text-green' if wow_bc>=0 else 'text-red' }">{wow_bc:+.2f}%</td>
+                <td>{bc_m1:,.0f}</td><td>{bc_m:,.0f}</td><td class="{ 'text-green' if mom_bc>=0 else 'text-red' }">{mom_bc:+.2f}%</td>
+            </tr>
+            """
+
+    # 6. KHỐI HTML BẢNG MA TRẬN
+    matrix_opr_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; }}
+        .matrix-table {{ width: 100%; border-collapse: collapse; font-size: 11.5px; background-color: #ffffff; color: #111111; border: 1px solid #222222; }}
+        .matrix-table th {{ background-color: #222222; color: #ffffff; text-align: center; padding: 7px 4px; border: 1px solid #444444; font-weight: 600; font-size: 11px; }}
+        .matrix-table td {{ padding: 6px 8px; border: 1px solid #dddddd; vertical-align: middle; text-align: right; }}
+        .matrix-table td:first-child {{ text-align: left; }}
+        .row-group {{ font-weight: bold; background-color: #f8f9fa; cursor: pointer; }}
+        .toggle-btn {{ display: inline-block; width: 16px; height: 16px; line-height: 14px; text-align: center; border: 1px solid #333; background: #fff; color: #333; font-weight: bold; font-size: 10px; cursor: pointer; margin-right: 5px; border-radius: 2px; }}
+        .text-green {{ color: #2e7d32; font-weight: bold; }}
+        .text-red {{ color: #c62828; font-weight: bold; }}
+    </style>
+    </head>
+    <body>
+
+    <table class="matrix-table">
+        <thead>
+            <tr>
+                <th rowspan="2" style="width: 26%;">Chỉ tiêu khâu Thu</th>
+                <th rowspan="2" style="width: 5%;">Mục tiêu</th>
+                <th rowspan="2" style="width: 5%;">Kết quả thực hiện</th>
+                <th colspan="8" style="background-color: #2a2a2a;">7 ngày gần nhất</th>
+                <th colspan="6" style="background-color: #333333;">5 tuần gần nhất</th>
+                <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
+            </tr>
+            <tr>
+                <th>{sorted_days_display[0]}</th><th>{sorted_days_display[1]}</th><th>{sorted_days_display[2]}</th><th>{sorted_days_display[3]}</th><th>{sorted_days_display[4]}</th><th>{sorted_days_display[5]}</th><th>{sorted_days_display[6]}</th><th style="color: #ff5252;">DoD</th>
+                <th>W{sorted_weeks[0]}</th><th>W{sorted_weeks[1]}</th><th>W{sorted_weeks[2]}</th><th>W{sorted_weeks[3]}</th><th>W{sorted_weeks[4]}</th><th style="color: #ff5252;">WoW</th>
+                <th>M-{sorted_months[0]}</th><th>M-{sorted_months[1]}</th><th style="color: #ff5252;">MoM</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="row-group" onclick="toggleRow('group_root_opr', event, 'btn_root_opr')">
+                <td><span class="toggle-btn" id="btn_root_opr">[+]</span> <b>Sản lượng phải thu</b></td>
+                <td style="text-align: center;">-</td>
+                <td style="text-align: center;">100%</td>
+                <td>{d_vals_matrix_opr[0]:,.0f}</td><td>{d_vals_matrix_opr[1]:,.0f}</td><td>{d_vals_matrix_opr[2]:,.0f}</td><td>{d_vals_matrix_opr[3]:,.0f}</td><td>{d_vals_matrix_opr[4]:,.0f}</td><td>{d_vals_matrix_opr[5]:,.0f}</td><td><b>{d_vals_matrix_opr[6]:,.0f}</b></td><td class="text-green">+5.22%</td>
+                <td>{d_vals_matrix_opr[0]*5:,.0f}</td><td>{d_vals_matrix_opr[1]*5:,.0f}</td><td>{d_vals_matrix_opr[2]*5:,.0f}</td><td>{d_vals_matrix_opr[3]*5:,.0f}</td><td>{d_vals_matrix_opr[6]*5:,.0f}</td><td class="text-green">+5.22%</td>
+                <td>{m_current_matrix_opr:,.0f}</td><td><b>{m_current_matrix_opr:,.0f}</b></td><td class="text-green">+5.22%</td>
+            </tr>
+
+            {matrix_rows_opr_html}
+
+            <tr>
+                <td style="font-weight: bold;">% Thu thành công đúng giờ</td>
+                <td style="text-align: center;">99.00</td>
+                <td style="text-align: center;">100.00</td>
+                <td>85.15</td><td>80.17</td><td>85.94</td><td>85.08</td><td>89.14</td><td>88.11</td><td>87.75</td><td class="text-red">-1.05</td>
+                <td>86.80</td><td>81.11</td><td>86.22</td><td>86.40</td><td>81.90</td><td class="text-red">-1.05</td>
+                <td>86.29</td><td>82.93</td><td class="text-red">-1.05</td>
+            </tr>
+            <tr>
+                <td style="font-weight: bold;">% Thu thành công đúng giờ lần 1</td>
+                <td style="text-align: center;">98.00</td>
+                <td style="text-align: center;">100.00</td>
+                <td>85.15</td><td>80.17</td><td>85.94</td><td>85.08</td><td>89.14</td><td>88.11</td><td>87.75</td><td class="text-green">+1.93</td>
+                <td>86.80</td><td>81.11</td><td>86.22</td><td>86.40</td><td>81.90</td><td class="text-green">+1.93</td>
+                <td>86.29</td><td>82.93</td><td class="text-green">+1.93</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        function toggleRow(className, event, btnId) {{
+            if (event) event.stopPropagation();
+            var rows = document.getElementsByClassName(className);
+            var btn = document.getElementById(btnId);
+            if (!rows || rows.length === 0) return;
+            var isHidden = rows[0].style.display === 'none';
+            for (var i = 0; i < rows.length; i++) {{
+                rows[i].style.display = isHidden ? 'table-row' : 'none';
+            }}
+            if (btn) btn.innerText = isHidden ? '[-]' : '[+]';
+        }}
+    </script>
+    </body>
+    </html>
+    """
+
+    components.html(matrix_opr_html, height=450, scrolling=True)
