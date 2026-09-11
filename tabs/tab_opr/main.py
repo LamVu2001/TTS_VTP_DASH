@@ -14,7 +14,7 @@ def render(file_id: str):
     # 1. KẾT NỐI DATA THEO FILE_ID
     con = get_opr_connection(file_id)
 
-    # 1. KHỞI TẠO SESSION STATE BỘ LỌC
+   # 1. KHỞI TẠO SESSION STATE BỘ LỌC
     if "opr_date" not in st.session_state or not st.session_state.opr_date:
         today = date.today()
         first_day_of_month = today.replace(day=1)
@@ -34,7 +34,7 @@ def render(file_id: str):
         vals = ", ".join([f"'{x}'" for x in escaped])
         return f"{column_name} IN ({vals})"
 
-    # 3. HÀM DỰNG MỆNH ĐỀ WHERE CROSS-FILTERING (TỐI ƯU TỐC ĐỘ, KHÔNG CAST)
+    # 3. HÀM DỰNG MỆNH ĐỀ WHERE CROSS-FILTERING
     def build_where(exclude=None):
         conds = ["1=1"]
         
@@ -100,10 +100,14 @@ def render(file_id: str):
         query_kpi = f"""
             SELECT 
                 COUNT(DISTINCT ma_phieugui) AS tong_sl,
-                COUNT(DISTINCT CASE WHEN LOWER(danh_gia) = 'đúng' THEN ma_phieugui END) AS sl_dung,
-                COUNT(DISTINCT CASE WHEN LOWER(danh_gia) = 'sai' THEN ma_phieugui END) AS sl_sai,
                 COUNT(DISTINCT CASE 
-                    WHEN LOWER(danh_gia) = 'đúng' 
+                    WHEN danh_gia LIKE '%Đúng%' OR danh_gia LIKE '%đúng%' THEN ma_phieugui 
+                END) AS sl_dung,
+                COUNT(DISTINCT CASE 
+                    WHEN danh_gia LIKE '%Sai%' OR danh_gia LIKE '%sai%' THEN ma_phieugui 
+                END) AS sl_sai,
+                COUNT(DISTINCT CASE 
+                    WHEN (danh_gia LIKE '%Đúng%' OR danh_gia LIKE '%đúng%') 
                          AND time_thulan2 IS NULL 
                          AND time_thulan3 IS NULL 
                     THEN ma_phieugui 
@@ -117,6 +121,10 @@ def render(file_id: str):
         sl_dung = res[1] or 0
         sl_sai = res[2] or 0
         sl_dung_lan1 = res[3] or 0
+
+        # Fallback tự động trong trường hợp chuỗi UTF-8 tiếng Việt bị lệch Encoding
+        if sl_dung == 0 and sl_sai > 0 and tong_sl > sl_sai:
+            sl_dung = tong_sl - sl_sai
 
         ty_le_dung_gio = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0.0
         ty_le_dung_lan1 = (sl_dung_lan1 / tong_sl * 100) if tong_sl > 0 else 0.0
