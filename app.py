@@ -1,6 +1,6 @@
 import streamlit as st
-from healthscore_page import render as render_healthscore
-from trang_moi_page import render as render_trang_moi
+from TTS import render as render_TTS
+from SPE import render as render_SPE
 
 st.set_page_config(
     page_title="Multi-Page App",
@@ -10,11 +10,11 @@ st.set_page_config(
 
 # Cấu hình menu sidebar bên trái
 pg = st.navigation({
-    "Báo cáo chính": [
-        st.Page(render_healthscore, title="Healthscore Dashboard", icon="📊"),
+    "Tiktoks": [
+        st.Page(render_TTS, title="Tiktoks Dashboard", icon="📊"),
     ],
-    "Chức năng khác": [
-        st.Page(render_trang_moi, title="Trang Mới", icon="📁"),
+    "Shopee": [
+        st.Page(render_SPE, title="Shopee Dashboard", icon="📁"),
     ]
 })
 
