@@ -599,60 +599,59 @@ def render(file_id: str):
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
 
-    # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT
+    # 0. XÁC ĐỊNH NGÀY KẾT THÚC (MAX_DT) TỪ FILTER NGÀY HIỆN TẠI
+    max_dt_res = con.execute(f"SELECT MAX(DATE(time_nhap_may)) FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL").fetchone()
+    import datetime
+    if max_dt_res and max_dt_res[0]:
+        max_dt = max_dt_res[0] if isinstance(max_dt_res[0], str) else max_dt_res[0].strftime('%Y-%m-%d')
+    else:
+        max_dt = datetime.date.today().strftime('%Y-%m-%d')
+
+    max_dt_obj = datetime.datetime.strptime(max_dt, '%Y-%m-%d')
+
+    # Tạo danh sách 7 ngày lùi dần từ max_dt (ngày mới nhất nằm ở cột cuối cùng sát DoD)
+    sorted_days_sql = []
+    for i in range(6, -1, -1):
+        d_obj = max_dt_obj - datetime.timedelta(days=i)
+        sorted_days_sql.append(d_obj.strftime('%Y-%m-%d'))
+
+    # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT THEO MỐC ĐÃ TÍNH
     days_data_matrix_opr = con.execute(f"""
         SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
         FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
-        GROUP BY DATE(time_nhap_may) 
-        ORDER BY clean_date DESC LIMIT 7
+          AND DATE(time_nhap_may) >= '{sorted_days_sql[0]}'
+          AND DATE(time_nhap_may) <= '{sorted_days_sql[-1]}'
+        GROUP BY DATE(time_nhap_may)
     """).fetchall()
 
-    days_dict_matrix_opr = {row[0].strftime('%Y-%m-%d'): row[1] for row in days_data_matrix_opr}
-    sorted_days_sql = sorted(list(days_dict_matrix_opr.keys()))
+    days_dict_matrix_opr = {str(row[0]): row[1] for row in days_data_matrix_opr}
     
-    # SỬA NGÀY: Hiển thị kèm Thứ (VD: T2 07/09 hoặc 07/09 - T2) thay vì chỉ có dd/mm
-    import datetime
     days_vn_map = {0: 'T2', 1: 'T3', 2: 'T4', 3: 'T5', 4: 'T6', 5: 'T7', 6: 'CN'}
-    
     sorted_days_display = []
     for d in sorted_days_sql:
-        if d == "1970-01-01":
-            sorted_days_display.append("--/--")
-        else:
-            dt_obj = datetime.datetime.strptime(d, '%Y-%m-%d')
-            dow_str = days_vn_map[dt_obj.weekday()]
-            sorted_days_display.append(f"{dow_str} {dt_obj.strftime('%d/%m')}")
+        dt_obj = datetime.datetime.strptime(d, '%Y-%m-%d')
+        dow_str = days_vn_map[dt_obj.weekday()]
+        sorted_days_display.append(f"{dow_str} {dt_obj.strftime('%d/%m')}")
 
-    while len(sorted_days_display) < 7:
-        sorted_days_display.insert(0, "--/--")
-        sorted_days_sql.insert(0, "1970-01-01")
     d_vals_matrix_opr = [days_dict_matrix_opr.get(d, 0) for d in sorted_days_sql]
 
-    # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN VÀ 2 THÁNG (CỐ ĐỊNH NHÃN)
-    # Lấy thêm khoảng ngày đầu-cuối của tuần để nhãn Tuần trực quan hơn (Ví dụ: W36: 01/09-07/09)
+    # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN VÀ 2 THÁNG
     weeks_list = con.execute(f"""
-        SELECT DISTINCT 
-            STRFTIME(DATE(time_nhap_may), '%W') as wk,
-            MIN(DATE(time_nhap_may)) as min_w_date,
-            MAX(DATE(time_nhap_may)) as max_w_date
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
-        GROUP BY wk
+        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%W') as wk
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
         ORDER BY wk DESC LIMIT 5
     """).fetchall()
-    
-    # Tạo dict ánh xạ tuần sang khoảng ngày nếu muốn, hoặc dùng format chuẩn
     sorted_weeks_raw = sorted([r[0] for r in weeks_list])
     while len(sorted_weeks_raw) < 5: sorted_weeks_raw.insert(0, "00")
 
-    # Xác định Tháng hiện tại (M) và Tháng trước (M-1) - Hiển thị dạng Tháng X/YYYY hoặc Th X
     months_list = con.execute(f"""
-        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%m/%Y') as m_str, STRFTIME(DATE(time_nhap_may), '%m') as m
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%m') as m
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
         ORDER BY m DESC LIMIT 2
     """).fetchall()
     
-    raw_months = [r[1] for r in months_list]
+    raw_months = [r[0] for r in months_list]
     if len(raw_months) == 1:
         cur_m_int = int(raw_months[0])
         prev_m_int = 12 if cur_m_int == 1 else cur_m_int - 1
@@ -661,8 +660,8 @@ def render(file_id: str):
         sorted_months = sorted(raw_months)
         while len(sorted_months) < 2: sorted_months.insert(0, "00")
 
-    # 3. TRUY VẤN TỔNG SẢN LƯỢNG DÒNG GỐC CHO 2 THÁNG
-    m_current_matrix_opr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr}").fetchone()[0]
+    # 3. TRUY VẤN TỔNG SẢN LƯỢNG DÒNG GỐC CHO THÁNG
+    m_current_matrix_opr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND DATE(time_nhap_may) <= '{max_dt}'").fetchone()[0]
     
     # 4. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC)
     tree_raw_data = con.execute(f"""
@@ -674,7 +673,7 @@ def render(file_id: str):
             STRFTIME(DATE(time_nhap_may), '%m') as thang,
             COUNT(*) as sl
         FROM orders 
-        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND DATE(time_nhap_may) <= '{max_dt}'
         GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%W'), STRFTIME(DATE(time_nhap_may), '%m')
     """).fetchall()
 
@@ -724,7 +723,6 @@ def render(file_id: str):
         matrix_rows_opr_html += f"""
         <tr class="sub-row-1 group_root_opr" style="display:none; background-color: #ffffff; color: #1565c0; font-weight:600;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
             <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Chi nhánh thu: <b>{tinh_name}</b></td>
-            <td>-</td><td>-</td>
             {tinh_day_tds}<td class="{ 'text-green' if dod_tinh>=0 else 'text-red' }">{dod_tinh:+.2f}%</td>
             {tinh_week_tds}<td class="{ 'text-green' if wow_tinh>=0 else 'text-red' }">{wow_tinh:+.2f}%</td>
             <td>{tinh_m1:,.0f}</td><td>{tinh_m:,.0f}</td><td class="{ 'text-green' if mom_tinh>=0 else 'text-red' }">{mom_tinh:+.2f}%</td>
@@ -750,7 +748,6 @@ def render(file_id: str):
             matrix_rows_opr_html += f"""
             <tr class="sub-row-2 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
                 <td style="padding-left: 40px;">• Bưu cục thu: <b>{bc_name}</b></td>
-                <td>-</td><td>-</td>
                 {bc_day_tds}<td class="{ 'text-green' if dod_bc>=0 else 'text-red' }">{dod_bc:+.2f}%</td>
                 {bc_week_tds}<td class="{ 'text-green' if wow_bc>=0 else 'text-red' }">{wow_bc:+.2f}%</td>
                 <td>{bc_m1:,.0f}</td><td>{bc_m:,.0f}</td><td class="{ 'text-green' if mom_bc>=0 else 'text-red' }">{mom_bc:+.2f}%</td>
@@ -779,9 +776,7 @@ def render(file_id: str):
     <table class="matrix-table">
         <thead>
             <tr>
-                <th rowspan="2" style="width: 26%;">Chỉ tiêu khâu Thu</th>
-                <th rowspan="2" style="width: 5%;">Mục tiêu</th>
-                <th rowspan="2" style="width: 5%;">Kết quả thực hiện</th>
+                <th rowspan="2" style="width: 30%;">Chỉ tiêu khâu Thu</th>
                 <th colspan="8" style="background-color: #2a2a2a;">7 ngày gần nhất</th>
                 <th colspan="6" style="background-color: #333333;">5 tuần gần nhất</th>
                 <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
@@ -795,8 +790,6 @@ def render(file_id: str):
         <tbody>
             <tr class="row-group" onclick="toggleRow('group_root_opr', event, 'btn_root_opr')">
                 <td><span class="toggle-btn" id="btn_root_opr">[+]</span> <b>Sản lượng phải thu</b></td>
-                <td style="text-align: center;">-</td>
-                <td style="text-align: center;">100%</td>
                 <td>{d_vals_matrix_opr[0]:,.0f}</td><td>{d_vals_matrix_opr[1]:,.0f}</td><td>{d_vals_matrix_opr[2]:,.0f}</td><td>{d_vals_matrix_opr[3]:,.0f}</td><td>{d_vals_matrix_opr[4]:,.0f}</td><td>{d_vals_matrix_opr[5]:,.0f}</td><td><b>{d_vals_matrix_opr[6]:,.0f}</b></td><td class="text-green">+5.22%</td>
                 <td>{d_vals_matrix_opr[0]*5:,.0f}</td><td>{d_vals_matrix_opr[1]*5:,.0f}</td><td>{d_vals_matrix_opr[2]*5:,.0f}</td><td>{d_vals_matrix_opr[3]*5:,.0f}</td><td>{d_vals_matrix_opr[6]*5:,.0f}</td><td class="text-green">+5.22%</td>
                 <td>{m_current_matrix_opr:,.0f}</td><td><b>{m_current_matrix_opr:,.0f}</b></td><td class="text-green">+5.22%</td>
@@ -806,16 +799,12 @@ def render(file_id: str):
 
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ</td>
-                <td style="text-align: center;">99.00</td>
-                <td style="text-align: center;">100.00</td>
                 <td>85.15</td><td>80.17</td><td>85.94</td><td>85.08</td><td>89.14</td><td>88.11</td><td>87.75</td><td class="text-red">-1.05</td>
                 <td>86.80</td><td>81.11</td><td>86.22</td><td>86.40</td><td>81.90</td><td class="text-red">-1.05</td>
                 <td>86.29</td><td>82.93</td><td class="text-red">-1.05</td>
             </tr>
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ lần 1</td>
-                <td style="text-align: center;">98.00</td>
-                <td style="text-align: center;">100.00</td>
                 <td>85.15</td><td>80.17</td><td>85.94</td><td>85.08</td><td>89.14</td><td>88.11</td><td>87.75</td><td class="text-green">+1.93</td>
                 <td>86.80</td><td>81.11</td><td>86.22</td><td>86.40</td><td>81.90</td><td class="text-green">+1.93</td>
                 <td>86.29</td><td>82.93</td><td class="text-green">+1.93</td>
