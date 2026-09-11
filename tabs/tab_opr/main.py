@@ -601,7 +601,7 @@ def render(file_id: str):
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
 
-    # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT
+    # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT (SẢN LƯỢNG)
     days_data_matrix_opr = con.execute(f"""
         SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
         FROM orders 
@@ -646,7 +646,7 @@ def render(file_id: str):
         sorted_months = sorted(raw_months)
         while len(sorted_months) < 2: sorted_months.insert(0, "00")
 
-    # 3. TRUY VẤN TỔNG SẢN LƯỢNG CHO 2 THÁNG & TỪNG TUẦN TỔNG
+    # 3. TRUY VẤN TỔNG SẢN LƯỢNG CHO 2 THÁNG & TUẦN
     m_prev_matrix_opr = con.execute(f"""
         SELECT COUNT(*) FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
@@ -661,7 +661,6 @@ def render(file_id: str):
 
     mom_tot = ((m_current_matrix_opr - m_prev_matrix_opr) / m_prev_matrix_opr * 100) if m_prev_matrix_opr > 0 else 0.0
 
-    # Truy vấn dữ liệu tuần tổng gốc
     weeks_data_sql = con.execute(f"""
         SELECT STRFTIME(DATE(time_nhap_may), '%W') as wk, COUNT(*) as sl
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
@@ -674,7 +673,70 @@ def render(file_id: str):
     wk_cur_tot = w_vals_matrix_opr[-1]
     wow_tot = ((wk_cur_tot - wk_prev_tot) / wk_prev_tot * 100) if wk_prev_tot > 0 else 0.0
 
-    # 4. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC)
+    # 4. TRUY VẤN TỶ LỆ TỔNG THEO NGÀY CHO 2 DÒNG DƯỚI
+    # Ngày -> Đúng giờ
+    dung_day_tot = con.execute(f"""
+        SELECT DATE(time_nhap_may), COUNT(*) 
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
+        GROUP BY DATE(time_nhap_may)
+    """).fetchall()
+    dung_day_dict = {str(r[0]): r[1] for r in dung_day_tot}
+
+    # Ngày -> Đúng giờ lần 1 (timenhaplan2 & lan3 null)
+    dung1_day_tot = con.execute(f"""
+        SELECT DATE(time_nhap_may), COUNT(*) 
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND timenhaplan2 IS NULL AND timenhaplan3 IS NULL
+        GROUP BY DATE(time_nhap_may)
+    """).fetchall()
+    dung1_day_dict = {str(r[0]): r[1] for r in dung1_day_tot}
+
+    # Tuần -> Đúng giờ & Đúng giờ lần 1
+    dung_week_tot = con.execute(f"""
+        SELECT STRFTIME(DATE(time_nhap_may), '%W'), COUNT(*) 
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
+        GROUP BY STRFTIME(DATE(time_nhap_may), '%W')
+    """).fetchall()
+    dung_w_dict = {r[0]: r[1] for r in dung_week_tot}
+
+    dung1_week_tot = con.execute(f"""
+        SELECT STRFTIME(DATE(time_nhap_may), '%W'), COUNT(*) 
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND timenhaplan2 IS NULL AND timenhaplan3 IS NULL
+        GROUP BY STRFTIME(DATE(time_nhap_may), '%W')
+    """).fetchall()
+    dung1_w_dict = {r[0]: r[1] for r in dung1_week_tot}
+
+    # Tháng -> Đúng giờ & Đúng giờ lần 1
+    dung_m_tot = con.execute(f"""
+        SELECT STRFTIME(DATE(time_nhap_may), '%m'), COUNT(*) 
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
+        GROUP BY STRFTIME(DATE(time_nhap_may), '%m')
+    """).fetchall()
+    dung_m_dict = {r[0]: r[1] for r in dung_m_tot}
+
+    dung1_m_tot = con.execute(f"""
+        SELECT STRFTIME(DATE(time_nhap_may), '%m'), COUNT(*) 
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND timenhaplan2 IS NULL AND timenhaplan3 IS NULL
+        GROUP BY STRFTIME(DATE(time_nhap_may), '%m')
+    """).fetchall()
+    dung1_m_dict = {r[0]: r[1] for r in dung1_m_tot}
+
+    # Tính mảng hiển thị % cho dòng tổng
+    rate_dung_days = [(dung_day_dict.get(d, 0) / days_dict_matrix_opr.get(d, 1) * 100) if days_dict_matrix_opr.get(d, 0) > 0 else 0.0 for d in sorted_days_sql]
+    rate_dung1_days = [(dung1_day_dict.get(d, 0) / days_dict_matrix_opr.get(d, 1) * 100) if days_dict_matrix_opr.get(d, 0) > 0 else 0.0 for d in sorted_days_sql]
+
+    rate_dung_weeks = [(dung_w_dict.get(w, 0) / weeks_dict_tot.get(w, 1) * 100) if weeks_dict_tot.get(w, 0) > 0 else 0.0 for w in sorted_weeks]
+    rate_dung1_weeks = [(dung1_w_dict.get(w, 0) / weeks_dict_tot.get(w, 1) * 100) if weeks_dict_tot.get(w, 0) > 0 else 0.0 for w in sorted_weeks]
+
+    m_prev_tot_sl = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}'").fetchone()[0]
+    m_curr_tot_sl = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}'").fetchone()[0]
+
+    rate_dung_m_prev = (dung_m_dict.get(sorted_months[0], 0) / m_prev_tot_sl * 100) if m_prev_tot_sl > 0 else 0.0
+    rate_dung_m_curr = (dung_m_dict.get(sorted_months[1], 0) / m_curr_tot_sl * 100) if m_curr_tot_sl > 0 else 0.0
+
+    rate_dung1_m_prev = (dung1_m_dict.get(sorted_months[0], 0) / m_prev_tot_sl * 100) if m_prev_tot_sl > 0 else 0.0
+    rate_dung1_m_curr = (dung1_m_dict.get(sorted_months[1], 0) / m_curr_tot_sl * 100) if m_curr_tot_sl > 0 else 0.0
+
+    # 5. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC)
     tree_raw_data = con.execute(f"""
         SELECT 
             COALESCE(tinh_nhan, 'Khác') as tinh,
@@ -682,55 +744,88 @@ def render(file_id: str):
             CAST(DATE(time_nhap_may) AS VARCHAR) as ngay,
             STRFTIME(DATE(time_nhap_may), '%W') as tuan,
             STRFTIME(DATE(time_nhap_may), '%m') as thang,
-            COUNT(*) as sl
+            COUNT(*) as sl,
+            SUM(CASE WHEN danh_gia = 'Dung' THEN 1 ELSE 0 END) as sl_dung,
+            SUM(CASE WHEN danh_gia = 'Dung' AND timenhaplan2 IS NULL AND timenhaplan3 IS NULL THEN 1 ELSE 0 END) as sl_dung1
         FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
         GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%W'), STRFTIME(DATE(time_nhap_may), '%m')
     """).fetchall()
 
     tree_struct_opr = {}
-    for tinh, bc, ngay, tuan, thang, sl in tree_raw_data:
+    for tinh, bc, ngay, tuan, thang, sl, sl_dung, sl_dung1 in tree_raw_data:
         if tinh not in tree_struct_opr:
             tree_struct_opr[tinh] = {
                 'days': {d: 0 for d in sorted_days_sql},
                 'weeks': {w: 0 for w in sorted_weeks},
                 'months': {m: 0 for m in sorted_months},
+                'days_dung': {d: 0 for d in sorted_days_sql},
+                'weeks_dung': {w: 0 for w in sorted_weeks},
+                'months_dung': {m: 0 for m in sorted_months},
+                'days_dung1': {d: 0 for d in sorted_days_sql},
+                'weeks_dung1': {w: 0 for w in sorted_weeks},
+                'months_dung1': {m: 0 for m in sorted_months},
                 'bcs': {}
             }
-        if ngay in tree_struct_opr[tinh]['days']: tree_struct_opr[tinh]['days'][ngay] += sl
-        if tuan in tree_struct_opr[tinh]['weeks']: tree_struct_opr[tinh]['weeks'][tuan] += sl
-        if thang in tree_struct_opr[tinh]['months']: tree_struct_opr[tinh]['months'][thang] += sl
+        if ngay in tree_struct_opr[tinh]['days']: 
+            tree_struct_opr[tinh]['days'][ngay] += sl
+            tree_struct_opr[tinh]['days_dung'][ngay] += sl_dung
+            tree_struct_opr[tinh]['days_dung1'][ngay] += sl_dung1
+        if tuan in tree_struct_opr[tinh]['weeks']: 
+            tree_struct_opr[tinh]['weeks'][tuan] += sl
+            tree_struct_opr[tinh]['weeks_dung'][tuan] += sl_dung
+            tree_struct_opr[tinh]['weeks_dung1'][tuan] += sl_dung1
+        if thang in tree_struct_opr[tinh]['months']: 
+            tree_struct_opr[tinh]['months'][thang] += sl
+            tree_struct_opr[tinh]['months_dung'][thang] += sl_dung
+            tree_struct_opr[tinh]['months_dung1'][thang] += sl_dung1
 
         if bc not in tree_struct_opr[tinh]['bcs']:
             tree_struct_opr[tinh]['bcs'][bc] = {
                 'days': {d: 0 for d in sorted_days_sql},
                 'weeks': {w: 0 for w in sorted_weeks},
-                'months': {m: 0 for m in sorted_months}
+                'months': {m: 0 for m in sorted_months},
+                'days_dung': {d: 0 for d in sorted_days_sql},
+                'weeks_dung': {w: 0 for w in sorted_weeks},
+                'months_dung': {m: 0 for m in sorted_months},
+                'days_dung1': {d: 0 for d in sorted_days_sql},
+                'weeks_dung1': {w: 0 for w in sorted_weeks},
+                'months_dung1': {m: 0 for m in sorted_months}
             }
-        if ngay in tree_struct_opr[tinh]['bcs'][bc]['days']: tree_struct_opr[tinh]['bcs'][bc]['days'][ngay] += sl
-        if tuan in tree_struct_opr[tinh]['bcs'][bc]['weeks']: tree_struct_opr[tinh]['bcs'][bc]['weeks'][tuan] += sl
-        if thang in tree_struct_opr[tinh]['bcs'][bc]['months']: tree_struct_opr[tinh]['bcs'][bc]['months'][thang] += sl
+        bc_node = tree_struct_opr[tinh]['bcs'][bc]
+        if ngay in bc_node['days']: 
+            bc_node['days'][ngay] += sl
+            bc_node['days_dung'][ngay] += sl_dung
+            bc_node['days_dung1'][ngay] += sl_dung1
+        if tuan in bc_node['weeks']: 
+            bc_node['weeks'][tuan] += sl
+            bc_node['weeks_dung'][tuan] += sl_dung
+            bc_node['weeks_dung1'][tuan] += sl_dung1
+        if thang in bc_node['months']: 
+            bc_node['months'][thang] += sl
+            bc_node['months_dung'][thang] += sl_dung
+            bc_node['months_dung1'][thang] += sl_dung1
 
-    # 5. RENDER HÀNG DRILL DOWN
+    # 6. RENDER HÀNG DRILL DOWN
     matrix_rows_opr_html = ""
-    for idx_tinh, (tinh_name, tinh_data) in enumerate(tree_struct_opr.items()):
+    for idx_tinh, (tinh_name, t_data) in enumerate(tree_struct_opr.items()):
         tinh_clean_id = f"opr_tinh_{idx_tinh}"
         
-        tinh_day_tds = "".join([f"<td>{tinh_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
-        tinh_week_tds = "".join([f"<td>{tinh_data['weeks'].get(w, 0):,.0f}</td>" for w in sorted_weeks])
-        tinh_m1 = tinh_data['months'].get(sorted_months[0], 0)
-        tinh_m = tinh_data['months'].get(sorted_months[1], 0)
+        tinh_day_tds = "".join([f"<td>{t_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
+        tinh_week_tds = "".join([f"<td>{t_data['weeks'].get(w, 0):,.0f}</td>" for w in sorted_weeks])
+        tinh_m1 = t_data['months'].get(sorted_months[0], 0)
+        tinh_m = t_data['months'].get(sorted_months[1], 0)
         
-        day_prev_tinh = tinh_data['days'].get(sorted_days_sql[-2], 0)
-        day_cur_tinh = tinh_data['days'].get(sorted_days_sql[-1], 0)
+        day_prev_tinh = t_data['days'].get(sorted_days_sql[-2], 0)
+        day_cur_tinh = t_data['days'].get(sorted_days_sql[-1], 0)
         dod_tinh = ((day_cur_tinh - day_prev_tinh) / day_prev_tinh * 100) if day_prev_tinh > 0 else 0.0
 
-        wk_prev_tinh = tinh_data['weeks'].get(sorted_weeks[-2], 0)
-        wk_cur_tinh = tinh_data['weeks'].get(sorted_weeks[-1], 0)
+        wk_prev_tinh = t_data['weeks'].get(sorted_weeks[-2], 0)
+        wk_cur_tinh = t_data['weeks'].get(sorted_weeks[-1], 0)
         wow_tinh = ((wk_cur_tinh - wk_prev_tinh) / wk_prev_tinh * 100) if wk_prev_tinh > 0 else 0.0
-
         mom_tinh = ((tinh_m - tinh_m1) / tinh_m1 * 100) if tinh_m1 > 0 else 0.0
 
+        # Render Chi nhánh
         matrix_rows_opr_html += f"""
         <tr class="sub-row-1 group_root_opr" style="display:none; background-color: #ffffff; color: #1565c0; font-weight:600;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
             <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Chi nhánh thu: <b>{tinh_name}</b></td>
@@ -740,7 +835,37 @@ def render(file_id: str):
         </tr>
         """
 
-        for bc_name, bc_data in tinh_data['bcs'].items():
+        # Tính tỷ lệ Chi nhánh (Đúng giờ & Đúng giờ lần 1)
+        tinh_dung_days_tds = "".join([f"<td>{(t_data['days_dung'].get(d,0)/t_data['days'].get(d,1)*100 if t_data['days'].get(d,0)>0 else 0):.2f}%</td>" for d in sorted_days_sql])
+        tinh_dung_weeks_tds = "".join([f"<td>{(t_data['weeks_dung'].get(w,0)/t_data['weeks'].get(w,1)*100 if t_data['weeks'].get(w,0)>0 else 0):.2f}%</td>" for w in sorted_weeks])
+        tinh_dung_m1 = (t_data['months_dung'].get(sorted_months[0], 0) / tinh_m1 * 100) if tinh_m1 > 0 else 0.0
+        tinh_dung_m = (t_data['months_dung'].get(sorted_months[1], 0) / tinh_m * 100) if tinh_m > 0 else 0.0
+
+        matrix_rows_opr_html += f"""
+        <tr class="sub-row-1 {tinh_clean_id}" style="display:none; background-color: #fcfcfc; color: #333; font-style: italic;">
+            <td style="padding-left: 35px;">↳ % Đúng giờ ({tinh_name})</td>
+            {tinh_dung_days_tds}<td>-</td>
+            {tinh_dung_weeks_tds}<td>-</td>
+            <td>{tinh_dung_m1:.2f}%</td><td>{tinh_dung_m:.2f}%</td><td>-</td>
+        </tr>
+        """
+
+        tinh_dung1_days_tds = "".join([f"<td>{(t_data['days_dung1'].get(d,0)/t_data['days'].get(d,1)*100 if t_data['days'].get(d,0)>0 else 0):.2f}%</td>" for d in sorted_days_sql])
+        tinh_dung1_weeks_tds = "".join([f"<td>{(t_data['weeks_dung1'].get(w,0)/t_data['weeks'].get(w,1)*100 if t_data['weeks'].get(w,0)>0 else 0):.2f}%</td>" for w in sorted_weeks])
+        tinh_dung1_m1 = (t_data['months_dung1'].get(sorted_months[0], 0) / tinh_m1 * 100) if tinh_m1 > 0 else 0.0
+        tinh_dung1_m = (t_data['months_dung1'].get(sorted_months[1], 0) / tinh_m * 100) if tinh_m > 0 else 0.0
+
+        matrix_rows_opr_html += f"""
+        <tr class="sub-row-1 {tinh_clean_id}" style="display:none; background-color: #fcfcfc; color: #333; font-style: italic;">
+            <td style="padding-left: 35px;">↳ % Đúng giờ lần 1 ({tinh_name})</td>
+            {tinh_dung1_days_tds}<td>-</td>
+            {tinh_dung1_weeks_tds}<td>-</td>
+            <td>{tinh_dung1_m1:.2f}%</td><td>{tinh_dung1_m:.2f}%</td><td>-</td>
+        </tr>
+        """
+
+        # Bưu cục cấp 2
+        for bc_name, bc_data in t_data['bcs'].items():
             bc_day_tds = "".join([f"<td>{bc_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
             bc_week_tds = "".join([f"<td>{bc_data['weeks'].get(w, 0):,.0f}</td>" for w in sorted_weeks])
             bc_m1 = bc_data['months'].get(sorted_months[0], 0)
@@ -753,7 +878,6 @@ def render(file_id: str):
             wk_prev_bc = bc_data['weeks'].get(sorted_weeks[-2], 0)
             wk_cur_bc = bc_data['weeks'].get(sorted_weeks[-1], 0)
             wow_bc = ((wk_cur_bc - wk_prev_bc) / wk_prev_bc * 100) if wk_prev_bc > 0 else 0.0
-
             mom_bc = ((bc_m - bc_m1) / bc_m1 * 100) if bc_m1 > 0 else 0.0
 
             matrix_rows_opr_html += f"""
@@ -765,7 +889,7 @@ def render(file_id: str):
             </tr>
             """
 
-    # 6. KHỐI HTML BẢNG MA TRẬN
+    # 7. KHỐI HTML BẢNG MA TRẬN TỔNG HỢP
     matrix_opr_html = f"""
     <!DOCTYPE html>
     <html>
@@ -810,15 +934,15 @@ def render(file_id: str):
 
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ</td>
-                <td colspan="8" style="text-align: center; color: #777; font-style: italic;">Đang cập nhật dữ liệu tỷ lệ thực tế</td>
-                <td colspan="6" style="text-align: center; color: #777; font-style: italic;">Đang cập nhật dữ liệu tỷ lệ thực tế</td>
-                <td colspan="3" style="text-align: center; color: #777; font-style: italic;">-</td>
+                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung_days])}<td>-</td>
+                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung_weeks])}<td>-</td>
+                <td>{rate_dung_m_prev:.2f}%</td><td>{rate_dung_m_curr:.2f}%</td><td>-</td>
             </tr>
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ lần 1</td>
-                <td colspan="8" style="text-align: center; color: #777; font-style: italic;">Đang cập nhật dữ liệu tỷ lệ thực tế</td>
-                <td colspan="6" style="text-align: center; color: #777; font-style: italic;">Đang cập nhật dữ liệu tỷ lệ thực tế</td>
-                <td colspan="3" style="text-align: center; color: #777; font-style: italic;">-</td>
+                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung1_days])}<td>-</td>
+                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung1_weeks])}<td>-</td>
+                <td>{rate_dung1_m_prev:.2f}%</td><td>{rate_dung1_m_curr:.2f}%</td><td>-</td>
             </tr>
         </tbody>
     </table>
