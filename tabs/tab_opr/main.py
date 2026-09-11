@@ -365,53 +365,93 @@ def render(file_id: str):
     
     # 4. DANH SÁCH CHI NHÁNH & BƯU CỤC THỰC HIỆN
     st.markdown('<p class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC THU (BẤM CHỌN DÒNG CHI NHÁNH BÊN TRÁI ĐỂ LỌC BƯU CỤC BÊN PHẢI)</p>', unsafe_allow_html=True)
-
+    
+    # 1. Truy vấn dữ liệu Chi nhánh (tinh_phat)
     cn_data_raw = con.execute(f"""
-        SELECT tinh_phat AS cn
+        SELECT 
+            tinh_phat AS cn,
+            COUNT(DISTINCT ma_phieugui) AS tong_sl,
+            COUNT(DISTINCT CASE 
+                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                THEN ma_phieugui 
+            END) AS sl_failed,
+            COUNT(DISTINCT CASE 
+                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                THEN ma_phieugui 
+            END) AS sl_dung
         FROM orders 
         WHERE {where_sql_opr} AND tinh_phat IS NOT NULL
         GROUP BY tinh_phat 
         ORDER BY tinh_phat ASC
     """).fetchall()
-
+    
+    # 2. Truy vấn dữ liệu Bưu cục (ma_buucuc_phat)
     bc_data_raw = con.execute(f"""
         SELECT 
             ma_buucuc_phat AS bc, 
-            tinh_phat AS cn
+            tinh_phat AS cn,
+            COUNT(DISTINCT ma_phieugui) AS tong_sl,
+            COUNT(DISTINCT CASE 
+                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                THEN ma_phieugui 
+            END) AS sl_failed,
+            COUNT(DISTINCT CASE 
+                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                THEN ma_phieugui 
+            END) AS sl_dung
         FROM orders 
         WHERE {where_sql_opr} AND tinh_phat IS NOT NULL AND ma_buucuc_phat IS NOT NULL
         GROUP BY ma_buucuc_phat, tinh_phat 
         ORDER BY ma_buucuc_phat ASC
     """).fetchall()
-
+    
+    # 3. Render HTML Rows cho Chi nhánh
     rows_cn_html = ""
     for item in cn_data_raw:
         cn_code = item[0]
+        tong_sl = item[1] or 0
+        sl_failed = item[2] or 0
+        sl_dung = item[3] or 0
+        ty_le_dung = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0
+    
         rows_cn_html += f"""
         <tr class="cn-row" data-cn="{cn_code}" onclick="filterBC('{cn_code}', this)">
             <td style="font-weight: bold; cursor: pointer;">{cn_code}</td>
-            <td>76.2%</td>
-            <td class="text-red">-4.8%</td>
-            <td style="background-color: #f9f9f9;">88.1%</td>
-            <td class="text-red" style="background-color: #f9f9f9;">-2.1%</td>
+            <td>{tong_sl:,.0f}</td>
+            <td class="text-red">{sl_failed:,.0f}</td>
+            <td>{sl_dung:,.0f}</td>
+            <td style="font-weight: bold; color: #2e7d32;">{ty_le_dung:.1f}%</td>
         </tr>
         """
-
+    
+    # 4. Render HTML Rows cho Bưu cục
     rows_bc_html = ""
     for item in bc_data_raw:
         bc_code = item[0]
         cn_code = item[1]
+        tong_sl = item[2] or 0
+        sl_failed = item[3] or 0
+        sl_dung = item[4] or 0
+        ty_le_dung = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0
+    
         rows_bc_html += f"""
         <tr class="bc-row" data-cn="{cn_code}">
             <td style="font-weight: bold;">{bc_code}</td>
             <td style="font-weight: bold;">{cn_code}</td>
-            <td>76.2%</td>
-            <td class="text-red">-4.8%</td>
-            <td style="background-color: #f9f9f9;">88.1%</td>
-            <td class="text-red" style="background-color: #f9f9f9;">-2.1%</td>
+            <td>{tong_sl:,.0f}</td>
+            <td class="text-red">{sl_failed:,.0f}</td>
+            <td>{sl_dung:,.0f}</td>
+            <td style="font-weight: bold; color: #2e7d32;">{ty_le_dung:.1f}%</td>
         </tr>
         """
-
+    
+    # 5. Giao diện HTML / JS tương tác
     interactive_tables_html = f"""
     <!DOCTYPE html>
     <html>
@@ -457,7 +497,7 @@ def render(file_id: str):
         tr.selected-cn {{
             background-color: #ffcdd2 !important;
         }}
-        .text-red {{ color: #c62828; font-weight: bold; background-color: #fff5f5; }}
+        .text-red {{ color: #c62828; font-weight: bold; }}
         .btn-reset {{
             display: inline-block; padding: 2px 8px; font-size: 11px;
             background: #eee; border: 1px solid #ccc; border-radius: 3px;
@@ -466,7 +506,7 @@ def render(file_id: str):
     </style>
     </head>
     <body>
-
+    
     <div class="grid-container">
         <div>
             <div class="table-title">
@@ -478,10 +518,10 @@ def render(file_id: str):
                     <thead>
                         <tr>
                             <th>Chi nhánh</th>
-                            <th>Tỷ lệ thu thành công đúng giờ</th>
-                            <th>SS cùng kỳ</th>
-                            <th>Tỷ lệ xuất sạch</th>
-                            <th>SS cùng kỳ</th>
+                            <th>SL Thu</th>
+                            <th>SL Thu Failed</th>
+                            <th>SL Thu Đúng Giờ</th>
+                            <th>Tỷ Lệ Thu Đúng Giờ</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -490,7 +530,7 @@ def render(file_id: str):
                 </table>
             </div>
         </div>
-
+    
         <div>
             <div class="table-title">
                 Bưu Cục Thu <span id="bc-title-status" style="color: #c62828; font-weight: bold;">(Toàn Quốc)</span>
@@ -501,10 +541,10 @@ def render(file_id: str):
                         <tr>
                             <th>Bưu cục</th>
                             <th>Chi nhánh</th>
-                            <th>Tỷ lệ thu thành công đúng giờ</th>
-                            <th>SS cùng kỳ</th>
-                            <th>Tỷ lệ xuất sạch</th>
-                            <th>SS cùng kỳ</th>
+                            <th>SL Thu</th>
+                            <th>SL Thu Failed</th>
+                            <th>SL Thu Đúng Giờ</th>
+                            <th>Tỷ Lệ Thu Đúng Giờ</th>
                         </tr>
                     </thead>
                     <tbody id="bc-tbody">
@@ -514,7 +554,7 @@ def render(file_id: str):
             </div>
         </div>
     </div>
-
+    
     <script>
         function filterBC(cnCode, rowElem) {{
             var cnRows = document.getElementsByClassName('cn-row');
@@ -522,20 +562,18 @@ def render(file_id: str):
                 cnRows[i].classList.remove('selected-cn');
             }}
             if (rowElem) rowElem.classList.add('selected-cn');
-
+    
             var bcRows = document.getElementsByClassName('bc-row');
-            var count = 0;
             for (var j = 0; j < bcRows.length; j++) {{
                 if (bcRows[j].getAttribute('data-cn') === cnCode) {{
                     bcRows[j].style.display = 'table-row';
-                    count++;
                 }} else {{
                     bcRows[j].style.display = 'none';
                 }}
             }}
             document.getElementById('bc-title-status').innerText = '(Chi nhánh: ' + cnCode + ')';
         }}
-
+    
         function resetFilter() {{
             var cnRows = document.getElementsByClassName('cn-row');
             for (var i = 0; i < cnRows.length; i++) {{
@@ -551,8 +589,6 @@ def render(file_id: str):
     </body>
     </html>
     """
-
+    
     components.html(interactive_tables_html, height=410, scrolling=False)
-
     st.divider()
-
