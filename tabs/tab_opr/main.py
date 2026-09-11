@@ -163,14 +163,14 @@ def render(file_id: str):
     with k1:
         st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG THU</div><div class="metric-value">{tong_sl:,.0f}</div></div>', unsafe_allow_html=True)
     with k2:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SL THU ĐÚNG SLA</div><div class="metric-value">{sl_dung:,.0f}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG THU ĐÚNG SLA</div><div class="metric-value">{sl_dung:,.0f}</div></div>', unsafe_allow_html=True)
     with k3:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SL THU SAI SLA</div><div class="metric-value">{sl_sai:,.0f}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG THU SAI SLA</div><div class="metric-value">{sl_sai:,.0f}</div></div>', unsafe_allow_html=True)
     with k4: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐÚNG GIỜ</div><div class="metric-value">{ty_le_dung_gio:.1f}%</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐÚNG SLA</div><div class="metric-value">{ty_le_dung_gio:.1f}%</div></div>', unsafe_allow_html=True)
     with k5:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐG LẦN 1</div><div class="metric-value">{ty_le_dung_lan1:.1f}%</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐÚNG SLA LẦN ĐẦU</div><div class="metric-value">{ty_le_dung_lan1:.1f}%</div></div>', unsafe_allow_html=True)
     with k6:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ FAILED</div><div class="metric-value">{ty_le_failed:.1f}%</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU SAI SLA</div><div class="metric-value">{ty_le_failed:.1f}%</div></div>', unsafe_allow_html=True)
 
     st.write("")
