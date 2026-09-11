@@ -963,30 +963,6 @@ def render(file_id: str):
         """
         components.html(matrix_full_html, height=480, scrolling=True)
 
-        # 5. NÚT TẢI DỮ LIỆU VỀ MÁY (ĐƠN GIẢN, GỌN GÀNG)
-        try:
-            export_df = con.execute(f"""
-                SELECT 
-                    COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as doi_tac,
-                    COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
-                    COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bưu_cục,
-                    STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as ngay,
-                    COUNT(DISTINCT ma_phieugui) as san_luong
-                FROM orders {base_where}
-                GROUP BY 1, 2, 3, 4
-            """).fetchdf()
-
-            if not export_df.empty:
-                st.download_button(
-                    label="📥 Tải xuống dữ liệu chi tiết (CSV)",
-                    data=export_df.to_csv(index=False).encode('utf-8-sig'),
-                    file_name="chi_tiet_chat_luong_phat.csv",
-                    mime="text/csv",
-                    key="btn_download_csv_phat"
-                )
-        except Exception as e:
-            pass
-
     except Exception as e:
         st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {e}")
 
