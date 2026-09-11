@@ -1,6 +1,6 @@
 import streamlit as st
-from TTS import render as render_TTS
-from SPE import render as render_SPE
+# from TTS import render as render_TTS
+# from SPE import render as render_SPE
 
 st.set_page_config(
     page_title="Multi-Page App",
