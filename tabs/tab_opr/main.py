@@ -182,16 +182,17 @@ def render(file_id: str):
         # 1. TIÊU ĐỀ
         st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
     
-        # 2. BỘ CHỌN TIME VIEW (NẰM DƯỚI TIÊU ĐỀ, TRÊN BIỂU ĐỒ)
+        # 2. BỘ CHỌN TIME VIEW (TRÊN BIỂU ĐỒ)
         view_type = st.radio("", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="opr_trend_view", label_visibility="collapsed")
     
-        # 3. XỬ LÝ GOM NHÓM THỜI GIAN
+        # 3. XỬ LÝ GOM NHÓM THỜI GIAN THEO DUCKDB chuẩn
         if view_type == "Ngày":
             time_group_sql = "STRFTIME('%d/%m', time_nhap_may)"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
         elif view_type == "Tuần":
-            # Quy về Chủ Nhật đầu tuần (0: Chủ Nhật -> 6: Thứ 7)
-            time_group_sql = "STRFTIME('%d/%m', DATEADD('day', -CAST(STRFTIME('%w', time_nhap_may) AS INT), CAST(time_nhap_may AS DATE)))"
+            # DuckDB: Trừ đi thứ trong tuần để lùi về Chủ Nhật (Chủ Nhật = 0)
+            # dayofweek() trong DuckDB: 0 (Chủ Nhật) -> 6 (Thứ 7)
+            time_group_sql = "STRFTIME('%d/%m', CAST(time_nhap_may AS DATE) - INTERVAL (DAYOFWEEK(CAST(time_nhap_may AS DATE))) DAY)"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
         else: # Tháng
             time_group_sql = "STRFTIME('%m/%Y', time_nhap_may)"
@@ -233,35 +234,41 @@ def render(file_id: str):
                 secondary_y=False,
             )
     
-            # Đường: Tỷ lệ thu đúng SLA (%)
-            show_text_mode = "lines+markers+text" if (view_type != "Ngày" or len(df_trend) <= 10) else "lines+markers"
-            
+            # Đường: Tỷ lệ thu đúng SLA (%) - Luôn show số % trên đỉnh chấm
             fig.add_trace(
                 go.Scatter(
                     x=df_trend['time_label'],
                     y=df_trend['ty_le_dung'],
                     name="Tỷ lệ thu đúng SLA (%)",
-                    mode=show_text_mode,
+                    mode="lines+markers+text",
                     line=dict(color="#c62828", width=3),
                     marker=dict(size=6, color="#c62828"),
                     text=[f"{v:.1f}%" for v in df_trend['ty_le_dung']],
-                    textposition="top center"
+                    textposition="top center",
+                    textfont=dict(size=10, color="#c62828")
                 ),
                 secondary_y=True,
             )
     
+            # Cấu hình Layout: Đẩy Legend xuống y=-0.45 để không bị đè vào nhãn Trục X
             fig.update_layout(
-                margin=dict(l=10, r=10, t=10, b=10),
-                height=300,
+                margin=dict(l=10, r=10, t=25, b=60),
+                height=340,
                 hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                legend=dict(
+                    orientation="h", 
+                    yanchor="top", 
+                    y=-0.45, 
+                    xanchor="center", 
+                    x=0.5
+                ),
                 plot_bgcolor="white",
                 paper_bgcolor="white"
             )
     
-            fig.update_xaxes(showgrid=False, type='category')
+            fig.update_xaxes(showgrid=False, type='category', tickangle=-90)
             fig.update_yaxes(title_text="Sản lượng", secondary_y=False, showgrid=True, gridcolor="#eee")
-            fig.update_yaxes(title_text="Tỷ lệ (%)", secondary_y=True, showgrid=False, range=[0, 110])
+            fig.update_yaxes(title_text="Tỷ lệ (%)", secondary_y=True, showgrid=False, range=[0, 115])
     
             st.plotly_chart(fig, use_container_width=True)
         else:
