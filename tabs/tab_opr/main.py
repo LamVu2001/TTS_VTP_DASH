@@ -276,48 +276,48 @@ def render(file_id: str):
 
     with c_opr_right:
         # 1. TIÊU ĐỀ BẢNG TOP 10
-    st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
-
-    # 2. TRUY VẤN DỮ LIỆU TOP 10 MÃ KHÁCH HÀNG
-    query_top_failed = f"""
-        SELECT 
-            ma_khgui AS "MÃ KHÁCH HÀNG",
-            COUNT(DISTINCT ma_phieugui) AS "SẢN LƯỢNG THU",
-            COUNT(DISTINCT CASE 
-                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
-                THEN ma_phieugui 
-            END) AS "SL THU FAILED",
-            COUNT(DISTINCT CASE 
-                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
-                THEN ma_phieugui 
-            END) AS "SL THU ĐÚNG GIỜ"
-        FROM orders 
-        WHERE {where_sql_opr} AND ma_khgui IS NOT NULL AND ma_khgui != ''
-        GROUP BY 1
-        ORDER BY "SL THU FAILED" DESC, "SẢN LƯỢNG THU" DESC
-        LIMIT 10
-    """
+        st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
     
-    df_top_failed = con.execute(query_top_failed).df()
-
-    if not df_top_failed.empty:
-        # Định dạng định dạng số nguyên có dấu phẩy (vd: 1,000,000)
-        df_display = df_top_failed.copy()
-        df_display["SẢN LƯỢNG THU"] = df_display["SẢN LƯỢNG THU"].map("{:,.0f}".format)
-        df_display["SL THU FAILED"] = df_display["SL THU FAILED"].map("{:,.0f}".format)
-        df_display["SL THU ĐÚNG GIỜ"] = df_display["SL THU ĐÚNG GIỜ"].map("{:,.0f}".format)
-
-        # Hiển thị DataFrame dưới dạng bảng HTML tùy biến CSS cho khớp giao diện
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            hide_index=True,
-            height=360
-        )
-    else:
-        st.info("Không có dữ liệu khách hàng.")
+        # 2. TRUY VẤN DỮ LIỆU TOP 10 MÃ KHÁCH HÀNG
+        query_top_failed = f"""
+            SELECT 
+                ma_khgui AS "MÃ KHÁCH HÀNG",
+                COUNT(DISTINCT ma_phieugui) AS "SẢN LƯỢNG THU",
+                COUNT(DISTINCT CASE 
+                    WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                    THEN ma_phieugui 
+                END) AS "SL THU FAILED",
+                COUNT(DISTINCT CASE 
+                    WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                    THEN ma_phieugui 
+                END) AS "SL THU ĐÚNG GIỜ"
+            FROM orders 
+            WHERE {where_sql_opr} AND ma_khgui IS NOT NULL AND ma_khgui != ''
+            GROUP BY 1
+            ORDER BY "SL THU FAILED" DESC, "SẢN LƯỢNG THU" DESC
+            LIMIT 10
+        """
+        
+        df_top_failed = con.execute(query_top_failed).df()
+    
+        if not df_top_failed.empty:
+            # Định dạng định dạng số nguyên có dấu phẩy (vd: 1,000,000)
+            df_display = df_top_failed.copy()
+            df_display["SẢN LƯỢNG THU"] = df_display["SẢN LƯỢNG THU"].map("{:,.0f}".format)
+            df_display["SL THU FAILED"] = df_display["SL THU FAILED"].map("{:,.0f}".format)
+            df_display["SL THU ĐÚNG GIỜ"] = df_display["SL THU ĐÚNG GIỜ"].map("{:,.0f}".format)
+    
+            # Hiển thị DataFrame dưới dạng bảng HTML tùy biến CSS cho khớp giao diện
+            st.dataframe(
+                df_display,
+                use_container_width=True,
+                hide_index=True,
+                height=360
+            )
+        else:
+            st.info("Không có dữ liệu khách hàng.")    
 
     st.divider()
