@@ -26,6 +26,7 @@ st.markdown("""
 pg = st.navigation([
     st.Page("TTS.py", title="Tiktoks Dashboard"),
     st.Page("SPE.py", title="Shopee Dashboard"),
+    st.Page("Others.py", title="Others KA Dashboard")
 ])
 
 pg.run()
