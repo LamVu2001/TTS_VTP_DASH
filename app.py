@@ -1,6 +1,4 @@
 import streamlit as st
-# from TTS import render as render_TTS
-# from SPE import render as render_SPE
 
 st.set_page_config(
     page_title="Multi-Page App",
@@ -11,10 +9,12 @@ st.set_page_config(
 # Cấu hình menu sidebar bên trái
 pg = st.navigation({
     "Tiktoks": [
-        st.Page(TTS.py, title="Tiktoks Dashboard", icon="📊"),
+        # Thêm dấu ngoặc kép "..." và đúng tên file của bạn
+        st.Page("TTS.py", title="Tiktoks Dashboard", icon="📊"),
     ],
     "Shopee": [
-        st.Page(SPE.py, title="Shopee Dashboard", icon="📁"),
+        # Thêm dấu ngoặc kép "..." và đúng tên file của bạn
+        st.Page("SPE.py", title="Shopee Dashboard", icon="📁"),
     ]
 })
 
