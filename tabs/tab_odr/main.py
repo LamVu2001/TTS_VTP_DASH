@@ -584,7 +584,7 @@ def render(file_id: str):
         weeks_df = con.execute(f"""
             SELECT 
                 STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as min_date,
-                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%W') as week_label
+                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%U') as week_label
             FROM orders {base_where}
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 5
         """).fetchdf()
