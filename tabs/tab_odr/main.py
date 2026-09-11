@@ -581,7 +581,6 @@ def render(file_id: str):
         day_cols = days_df["dt"].tolist()[::-1] if days_df is not None and not days_df.empty else []
         day_labels = days_df["dt_label"].tolist()[::-1] if days_df is not None and not days_df.empty else []
 
-        # Đổi cách lấy tuần sang chuẩn %U (Tuần bắt đầu từ Chủ Nhật)
         weeks_df = con.execute(f"""
             SELECT 
                 STRFTIME(CAST(tg_ptc AS DATE), '%U') as min_date,
@@ -603,7 +602,7 @@ def render(file_id: str):
         while len(month_cols) < 2:
             month_cols.insert(0, f"M_empty_{len(month_cols)}")
 
-        # 2. AGGREGATE BẢNG TỔNG (FIX ĐIỀU KIỆN PTC_1 ÉP KIỂU VARCHAR CHUẨN)
+        # 2. AGGREGATE BẢNG TỔNG
         sql_ptc1_expr = "CAST(PTC_1 AS VARCHAR) IN ('1', '1.0', 'true', 'TRUE')"
 
         df_d = con.execute(f"""
@@ -964,8 +963,32 @@ def render(file_id: str):
         """
         components.html(matrix_full_html, height=480, scrolling=True)
 
+        # 5. NÚT TẢI DỮ LIỆU VỀ MÁY (ĐƠN GIẢN, GỌN GÀNG)
+        try:
+            export_df = con.execute(f"""
+                SELECT 
+                    COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as doi_tac,
+                    COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
+                    COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bưu_cục,
+                    STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as ngay,
+                    COUNT(DISTINCT ma_phieugui) as san_luong
+                FROM orders {base_where}
+                GROUP BY 1, 2, 3, 4
+            """).fetchdf()
+
+            if not export_df.empty:
+                st.download_button(
+                    label="📥 Tải xuống dữ liệu chi tiết (CSV)",
+                    data=export_df.to_csv(index=False).encode('utf-8-sig'),
+                    file_name="chi_tiet_chat_luong_phat.csv",
+                    mime="text/csv",
+                    key="btn_download_csv_phat"
+                )
+        except Exception as e:
+            pass
+
     except Exception as e:
-        st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {{e}}")
+        st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {e}")
 
     st.divider()
 
