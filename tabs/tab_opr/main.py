@@ -304,37 +304,34 @@ def render(file_id: str):
         df_top_failed = con.execute(query_top_failed).df()
     
         if not df_top_failed.empty:
-            # Render lại bảng HTML chuẩn giao diện custom cũ của bạn
             rows_html = ""
             for _, row in df_top_failed.iterrows():
-                rows_html += f"""
-                <tr style="border-bottom: 1px solid #eee;">
-                    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['ma_khgui']}</td>
-                    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['tong_sl']:,.0f}</td>
-                    <td style="padding: 8px; font-weight: bold; text-align: center; color: #c62828;">{row['sl_failed']:,.0f}</td>
-                    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['sl_dung']:,.0f}</td>
-                </tr>
-                """
+                rows_html += f"""<tr>
+    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['ma_khgui']}</td>
+    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['tong_sl']:,.0f}</td>
+    <td style="padding: 8px; font-weight: bold; text-align: center; color: #c62828;">{row['sl_failed']:,.0f}</td>
+    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['sl_dung']:,.0f}</td>
+    </tr>"""
     
-            table_html = f"""
-            <div style="max-height: 350px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                    <thead>
-                        <tr style="background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;">
-                            <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">MÃ KHÁCH HÀNG</th>
-                            <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SẢN LƯỢNG THU</th>
-                            <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SL THU FAILED</th>
-                            <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SL THU ĐÚNG GIỜ</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows_html}
-                    </tbody>
-                </table>
-            </div>
-            """
-            st.markdown(table_html, unsafe_allow_html=True)
+            raw_table_html = f"""
+    <div style="max-height: 350px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;">
+                    <th style="padding: 10px 4px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">MÃ KHÁCH HÀNG</th>
+                    <th style="padding: 10px 4px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SẢN LƯỢNG THU</th>
+                    <th style="padding: 10px 4px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SL THU FAILED</th>
+                    <th style="padding: 10px 4px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SL THU ĐÚNG GIỜ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+    </div>
+    """
+            st.markdown(textwrap.dedent(raw_table_html), unsafe_allow_html=True)
         else:
-            st.info("Không có dữ liệu khách hàng.")   
+            st.info("Không có dữ liệu khách hàng.")
 
     st.divider()
