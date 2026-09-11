@@ -673,7 +673,7 @@ def render(file_id: str):
     wk_cur_tot = w_vals_matrix_opr[-1]
     wow_tot = ((wk_cur_tot - wk_prev_tot) / wk_prev_tot * 100) if wk_prev_tot > 0 else 0.0
     
-    # 4. TRUY VẤN TỶ LỆ CHO DÒNG TỔNG (ĐÃ ĐỒNG BỘ ĐIỀU KIỆN LỌC LINH HOẠT)
+    # 4. TRUY VẤN TỶ LỆ CHO DÒNG TỔNG (ĐIỀU KIỆN LỌC LINH HOẠT)
     rate_dung_days = []
     rate_dung1_days = []
     for d in sorted_days_sql:
@@ -757,7 +757,7 @@ def render(file_id: str):
     rate_dung1_m_prev = (m_prev_dung1 / m_prev_tot_sl * 100) if m_prev_tot_sl > 0 else 0.0
     rate_dung1_m_curr = (m_curr_dung1 / m_curr_tot_sl * 100) if m_curr_tot_sl > 0 else 0.0
     
-    # 5. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC) VỚI CÔNG THỨC CHUẨN XÁC
+    # 5. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC)
     tree_raw_data = con.execute(f"""
         SELECT 
             COALESCE(tinh_nhan, 'Khác') as tinh,
@@ -922,7 +922,15 @@ def render(file_id: str):
             </tr>
             """
     
-    # 7. KHỐI HTML BẢNG MA TRẬN TỔNG HỢP
+    # 7. TÍNH CHỈ SỐ SO SÁNH CHO 2 DÒNG TỶ LỆ VÀ KHỐI HTML TỔNG HỢP
+    dod_rate_dung = ((rate_dung_days[-1] - rate_dung_days[-2]) / rate_dung_days[-2] * 100) if rate_dung_days[-2] > 0 else 0.0
+    wow_rate_dung = ((rate_dung_weeks[-1] - rate_dung_weeks[-2]) / rate_dung_weeks[-2] * 100) if rate_dung_weeks[-2] > 0 else 0.0
+    mom_rate_dung = ((rate_dung_m_curr - rate_dung_m_prev) / rate_dung_m_prev * 100) if rate_dung_m_prev > 0 else 0.0
+    
+    dod_rate_dung1 = ((rate_dung1_days[-1] - rate_dung1_days[-2]) / rate_dung1_days[-2] * 100) if rate_dung1_days[-2] > 0 else 0.0
+    wow_rate_dung1 = ((rate_dung1_weeks[-1] - rate_dung1_weeks[-2]) / rate_dung1_weeks[-2] * 100) if rate_dung1_weeks[-2] > 0 else 0.0
+    mom_rate_dung1 = ((rate_dung1_m_curr - rate_dung1_m_prev) / rate_dung1_m_prev * 100) if rate_dung1_m_prev > 0 else 0.0
+    
     matrix_opr_html = f"""
     <!DOCTYPE html>
     <html>
@@ -956,6 +964,7 @@ def render(file_id: str):
             </tr>
         </thead>
         <tbody>
+            <!-- DÒNG SẢN LƯỢNG -->
             <tr class="row-group" onclick="toggleRow('group_root_opr', event, 'btn_root_opr')">
                 <td><span class="toggle-btn" id="btn_root_opr">[+]</span> <b>Sản lượng phải thu</b></td>
                 <td>{d_vals_matrix_opr[0]:,.0f}</td><td>{d_vals_matrix_opr[1]:,.0f}</td><td>{d_vals_matrix_opr[2]:,.0f}</td><td>{d_vals_matrix_opr[3]:,.0f}</td><td>{d_vals_matrix_opr[4]:,.0f}</td><td>{d_vals_matrix_opr[5]:,.0f}</td><td><b>{d_vals_matrix_opr[6]:,.0f}</b></td><td class="{ 'text-green' if dod_tot>=0 else 'text-red' }">{dod_tot:+.2f}%</td>
@@ -965,17 +974,26 @@ def render(file_id: str):
     
             {matrix_rows_opr_html}
     
+            <!-- DÒNG % THU THÀNH CÔNG ĐÚNG GIỜ -->
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ</td>
-                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung_days])}<td>-</td>
-                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung_weeks])}<td>-</td>
-                <td>{rate_dung_m_prev:.2f}%</td><td>{rate_dung_m_curr:.2f}%</td><td>-</td>
+                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung_days])}
+                <td class="{ 'text-green' if dod_rate_dung>=0 else 'text-red' }">{dod_rate_dung:+.2f}%</td>
+                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung_weeks])}
+                <td class="{ 'text-green' if wow_rate_dung>=0 else 'text-red' }">{wow_rate_dung:+.2f}%</td>
+                <td>{rate_dung_m_prev:.2f}%</td><td>{rate_dung_m_curr:.2f}%</td>
+                <td class="{ 'text-green' if mom_rate_dung>=0 else 'text-red' }">{mom_rate_dung:+.2f}%</td>
             </tr>
+    
+            <!-- DÒNG % THU THÀNH CÔNG ĐÚNG GIỜ LẦN 1 -->
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ lần 1</td>
-                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung1_days])}<td>-</td>
-                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung1_weeks])}<td>-</td>
-                <td>{rate_dung1_m_prev:.2f}%</td><td>{rate_dung1_m_curr:.2f}%</td><td>-</td>
+                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung1_days])}
+                <td class="{ 'text-green' if dod_rate_dung1>=0 else 'text-red' }">{dod_rate_dung1:+.2f}%</td>
+                {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung1_weeks])}
+                <td class="{ 'text-green' if wow_rate_dung1>=0 else 'text-red' }">{wow_rate_dung1:+.2f}%</td>
+                <td>{rate_dung1_m_prev:.2f}%</td><td>{rate_dung1_m_curr:.2f}%</td>
+                <td class="{ 'text-green' if mom_rate_dung1>=0 else 'text-red' }">{mom_rate_dung1:+.2f}%</td>
             </tr>
         </tbody>
     </table>
