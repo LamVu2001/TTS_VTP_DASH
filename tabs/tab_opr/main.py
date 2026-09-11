@@ -600,7 +600,7 @@ def render(file_id: str):
 
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
-
+    
     # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT (SẢN LƯỢNG)
     days_data_matrix_opr = con.execute(f"""
         SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
@@ -609,7 +609,7 @@ def render(file_id: str):
         GROUP BY DATE(time_nhap_may) 
         ORDER BY clean_date DESC LIMIT 7
     """).fetchall()
-
+    
     days_dict_matrix_opr = {row[0].strftime('%Y-%m-%d'): row[1] for row in days_data_matrix_opr}
     sorted_days_sql = sorted(list(days_dict_matrix_opr.keys()))
     sorted_days_display = [d.split('-')[2] + '/' + d.split('-')[1] for d in sorted_days_sql]
@@ -617,11 +617,11 @@ def render(file_id: str):
         sorted_days_display.insert(0, "--/--")
         sorted_days_sql.insert(0, "1970-01-01")
     d_vals_matrix_opr = [days_dict_matrix_opr.get(d, 0) for d in sorted_days_sql]
-
+    
     day_prev_tot = d_vals_matrix_opr[-2]
     day_cur_tot = d_vals_matrix_opr[-1]
     dod_tot = ((day_cur_tot - day_prev_tot) / day_prev_tot * 100) if day_prev_tot > 0 else 0.0
-
+    
     # 2. XÁC ĐỊNH DANH SÁCH 5 TUẦN VÀ 2 THÁNG
     weeks_list = con.execute(f"""
         SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%W') as wk
@@ -630,7 +630,7 @@ def render(file_id: str):
     """).fetchall()
     sorted_weeks = sorted([r[0] for r in weeks_list])
     while len(sorted_weeks) < 5: sorted_weeks.insert(0, "00")
-
+    
     months_list = con.execute(f"""
         SELECT DISTINCT STRFTIME(DATE(time_nhap_may), '%m') as m
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
@@ -645,22 +645,22 @@ def render(file_id: str):
     else:
         sorted_months = sorted(raw_months)
         while len(sorted_months) < 2: sorted_months.insert(0, "00")
-
+    
     # 3. TRUY VẤN TỔNG SẢN LƯỢNG CHO 2 THÁNG & TUẦN
     m_prev_matrix_opr = con.execute(f"""
         SELECT COUNT(*) FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
         AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}'
     """).fetchone()[0]
-
+    
     m_current_matrix_opr = con.execute(f"""
         SELECT COUNT(*) FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
         AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}'
     """).fetchone()[0]
-
+    
     mom_tot = ((m_current_matrix_opr - m_prev_matrix_opr) / m_prev_matrix_opr * 100) if m_prev_matrix_opr > 0 else 0.0
-
+    
     weeks_data_sql = con.execute(f"""
         SELECT STRFTIME(DATE(time_nhap_may), '%W') as wk, COUNT(*) as sl
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
@@ -668,71 +668,64 @@ def render(file_id: str):
     """).fetchall()
     weeks_dict_tot = {row[0]: row[1] for row in weeks_data_sql}
     w_vals_matrix_opr = [weeks_dict_tot.get(w, 0) for w in sorted_weeks]
-
+    
     wk_prev_tot = w_vals_matrix_opr[-2]
     wk_cur_tot = w_vals_matrix_opr[-1]
     wow_tot = ((wk_cur_tot - wk_prev_tot) / wk_prev_tot * 100) if wk_prev_tot > 0 else 0.0
-
-    # 4. TRUY VẤN TỶ LỆ TỔNG THEO NGÀY CHO 2 DÒNG DƯỚI (Đã đổi sang time_thulan2 & time_thulan3)
-    dung_day_tot = con.execute(f"""
-        SELECT DATE(time_nhap_may), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
-        GROUP BY DATE(time_nhap_may)
-    """).fetchall()
-    dung_day_dict = {str(r[0]): r[1] for r in dung_day_tot}
-
-    dung1_day_tot = con.execute(f"""
-        SELECT DATE(time_nhap_may), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL
-        GROUP BY DATE(time_nhap_may)
-    """).fetchall()
-    dung1_day_dict = {str(r[0]): r[1] for r in dung1_day_tot}
-
-    dung_week_tot = con.execute(f"""
-        SELECT STRFTIME(DATE(time_nhap_may), '%W'), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
-        GROUP BY STRFTIME(DATE(time_nhap_may), '%W')
-    """).fetchall()
-    dung_w_dict = {r[0]: r[1] for r in dung_week_tot}
-
-    dung1_week_tot = con.execute(f"""
-        SELECT STRFTIME(DATE(time_nhap_may), '%W'), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL
-        GROUP BY STRFTIME(DATE(time_nhap_may), '%W')
-    """).fetchall()
-    dung1_w_dict = {r[0]: r[1] for r in dung1_week_tot}
-
-    dung_m_tot = con.execute(f"""
-        SELECT STRFTIME(DATE(time_nhap_may), '%m'), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
-        GROUP BY STRFTIME(DATE(time_nhap_may), '%m')
-    """).fetchall()
-    dung_m_dict = {r[0]: r[1] for r in dung_m_tot}
-
-    dung1_m_tot = con.execute(f"""
-        SELECT STRFTIME(DATE(time_nhap_may), '%m'), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL
-        GROUP BY STRFTIME(DATE(time_nhap_may), '%m')
-    """).fetchall()
-    dung1_m_dict = {r[0]: r[1] for r in dung1_m_tot}
-
-    # Tính mảng hiển thị % cho dòng tổng
-    rate_dung_days = [(dung_day_dict.get(d, 0) / days_dict_matrix_opr.get(d, 1) * 100) if days_dict_matrix_opr.get(d, 0) > 0 else 0.0 for d in sorted_days_sql]
-    rate_dung1_days = [(dung1_day_dict.get(d, 0) / days_dict_matrix_opr.get(d, 1) * 100) if days_dict_matrix_opr.get(d, 0) > 0 else 0.0 for d in sorted_days_sql]
-
-    rate_dung_weeks = [(dung_w_dict.get(w, 0) / weeks_dict_tot.get(w, 1) * 100) if weeks_dict_tot.get(w, 0) > 0 else 0.0 for w in sorted_weeks]
-    rate_dung1_weeks = [(dung1_w_dict.get(w, 0) / weeks_dict_tot.get(w, 1) * 100) if weeks_dict_tot.get(w, 0) > 0 else 0.0 for w in sorted_weeks]
-
+    
+    # 4. TRUY VẤN TỶ LỆ CHO DÒNG TỔNG THEO DANH SÁCH ĐÃ CHUẨN HÓA
+    rate_dung_days = []
+    rate_dung1_days = []
+    for d in sorted_days_sql:
+        if d == "1970-01-01":
+            rate_dung_days.append(0.0)
+            rate_dung1_days.append(0.0)
+            continue
+        
+        tot_d = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}'").fetchone()[0]
+        if tot_d > 0:
+            d_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}' AND danh_gia = 'Dung'").fetchone()[0]
+            d_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND DATE(time_nhap_may) = '{d}' AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL").fetchone()[0]
+            rate_dung_days.append((d_dung / tot_d) * 100)
+            rate_dung1_days.append((d_dung1 / tot_d) * 100)
+        else:
+            rate_dung_days.append(0.0)
+            rate_dung1_days.append(0.0)
+    
+    rate_dung_weeks = []
+    rate_dung1_weeks = []
+    for w in sorted_weeks:
+        if w == "00":
+            rate_dung_weeks.append(0.0)
+            rate_dung1_weeks.append(0.0)
+            continue
+            
+        tot_w = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}'").fetchone()[0]
+        if tot_w > 0:
+            w_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}' AND danh_gia = 'Dung'").fetchone()[0]
+            w_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%W') = '{w}' AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL").fetchone()[0]
+            rate_dung_weeks.append((w_dung / tot_w) * 100)
+            rate_dung1_weeks.append((w_dung1 / tot_w) * 100)
+        else:
+            rate_dung_weeks.append(0.0)
+            rate_dung1_weeks.append(0.0)
+    
     m_prev_tot_sl = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}'").fetchone()[0]
     m_curr_tot_sl = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}'").fetchone()[0]
-
-    rate_dung_m_prev = (dung_m_dict.get(sorted_months[0], 0) / m_prev_tot_sl * 100) if m_prev_tot_sl > 0 else 0.0
-    rate_dung_m_curr = (dung_m_dict.get(sorted_months[1], 0) / m_curr_tot_sl * 100) if m_curr_tot_sl > 0 else 0.0
-
-    rate_dung1_m_prev = (dung1_m_dict.get(sorted_months[0], 0) / m_prev_tot_sl * 100) if m_prev_tot_sl > 0 else 0.0
-    rate_dung1_m_curr = (dung1_m_dict.get(sorted_months[1], 0) / m_curr_tot_sl * 100) if m_curr_tot_sl > 0 else 0.0
-
-    # 5. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC)
+    
+    m_prev_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}' AND danh_gia = 'Dung'").fetchone()[0]
+    m_curr_dung = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}' AND danh_gia = 'Dung'").fetchone()[0]
+    
+    m_prev_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}' AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL").fetchone()[0]
+    m_curr_dung1 = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr} AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}' AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL").fetchone()[0]
+    
+    rate_dung_m_prev = (m_prev_dung / m_prev_tot_sl * 100) if m_prev_tot_sl > 0 else 0.0
+    rate_dung_m_curr = (m_curr_dung / m_curr_tot_sl * 100) if m_curr_tot_sl > 0 else 0.0
+    
+    rate_dung1_m_prev = (m_prev_dung1 / m_prev_tot_sl * 100) if m_prev_tot_sl > 0 else 0.0
+    rate_dung1_m_curr = (m_curr_dung1 / m_curr_tot_sl * 100) if m_curr_tot_sl > 0 else 0.0
+    
+    # 5. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC) VỚI CÔNG THỨC CHUẨN XÁC
     tree_raw_data = con.execute(f"""
         SELECT 
             COALESCE(tinh_nhan, 'Khác') as tinh,
@@ -740,14 +733,29 @@ def render(file_id: str):
             CAST(DATE(time_nhap_may) AS VARCHAR) as ngay,
             STRFTIME(DATE(time_nhap_may), '%W') as tuan,
             STRFTIME(DATE(time_nhap_may), '%m') as thang,
-            COUNT(*) as sl,
-            SUM(CASE WHEN danh_gia = 'Dung' THEN 1 ELSE 0 END) as sl_dung,
-            SUM(CASE WHEN danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL THEN 1 ELSE 0 END) as sl_dung1
+            COUNT(DISTINCT ma_phieugui) as sl,
+            
+            COUNT(DISTINCT CASE 
+                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                THEN ma_phieugui 
+            END) as sl_dung,
+            
+            COUNT(DISTINCT CASE 
+                WHEN (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%') 
+                     AND (time_thulan2 IS NULL OR CAST(time_thulan2 AS VARCHAR) = '' OR CAST(time_thulan2 AS VARCHAR) = 'NaT')
+                     AND (time_thulan3 IS NULL OR CAST(time_thulan3 AS VARCHAR) = '' OR CAST(time_thulan3 AS VARCHAR) = 'NaT')
+                THEN ma_phieugui 
+            END) as sl_dung1
+    
         FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
         GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%W'), STRFTIME(DATE(time_nhap_may), '%m')
     """).fetchall()
-
+    
     tree_struct_opr = {}
     for tinh, bc, ngay, tuan, thang, sl, sl_dung, sl_dung1 in tree_raw_data:
         if tinh not in tree_struct_opr:
@@ -775,7 +783,7 @@ def render(file_id: str):
             tree_struct_opr[tinh]['months'][thang] += sl
             tree_struct_opr[tinh]['months_dung'][thang] += sl_dung
             tree_struct_opr[tinh]['months_dung1'][thang] += sl_dung1
-
+    
         if bc not in tree_struct_opr[tinh]['bcs']:
             tree_struct_opr[tinh]['bcs'][bc] = {
                 'days': {d: 0 for d in sorted_days_sql},
@@ -801,7 +809,7 @@ def render(file_id: str):
             bc_node['months'][thang] += sl
             bc_node['months_dung'][thang] += sl_dung
             bc_node['months_dung1'][thang] += sl_dung1
-
+    
     # 6. RENDER HÀNG DRILL DOWN
     matrix_rows_opr_html = ""
     for idx_tinh, (tinh_name, t_data) in enumerate(tree_struct_opr.items()):
@@ -815,13 +823,12 @@ def render(file_id: str):
         day_prev_tinh = t_data['days'].get(sorted_days_sql[-2], 0)
         day_cur_tinh = t_data['days'].get(sorted_days_sql[-1], 0)
         dod_tinh = ((day_cur_tinh - day_prev_tinh) / day_prev_tinh * 100) if day_prev_tinh > 0 else 0.0
-
+    
         wk_prev_tinh = t_data['weeks'].get(sorted_weeks[-2], 0)
         wk_cur_tinh = t_data['weeks'].get(sorted_weeks[-1], 0)
         wow_tinh = ((wk_cur_tinh - wk_prev_tinh) / wk_prev_tinh * 100) if wk_prev_tinh > 0 else 0.0
         mom_tinh = ((tinh_m - tinh_m1) / tinh_m1 * 100) if tinh_m1 > 0 else 0.0
-
-        # Render Chi nhánh
+    
         matrix_rows_opr_html += f"""
         <tr class="sub-row-1 group_root_opr" style="display:none; background-color: #ffffff; color: #1565c0; font-weight:600;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
             <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Chi nhánh thu: <b>{tinh_name}</b></td>
@@ -830,13 +837,12 @@ def render(file_id: str):
             <td>{tinh_m1:,.0f}</td><td>{tinh_m:,.0f}</td><td class="{ 'text-green' if mom_tinh>=0 else 'text-red' }">{mom_tinh:+.2f}%</td>
         </tr>
         """
-
-        # Tính tỷ lệ Chi nhánh (Đúng giờ & Đúng giờ lần 1)
+    
         tinh_dung_days_tds = "".join([f"<td>{(t_data['days_dung'].get(d,0)/t_data['days'].get(d,1)*100 if t_data['days'].get(d,0)>0 else 0):.2f}%</td>" for d in sorted_days_sql])
         tinh_dung_weeks_tds = "".join([f"<td>{(t_data['weeks_dung'].get(w,0)/t_data['weeks'].get(w,1)*100 if t_data['weeks'].get(w,0)>0 else 0):.2f}%</td>" for w in sorted_weeks])
         tinh_dung_m1 = (t_data['months_dung'].get(sorted_months[0], 0) / tinh_m1 * 100) if tinh_m1 > 0 else 0.0
         tinh_dung_m = (t_data['months_dung'].get(sorted_months[1], 0) / tinh_m * 100) if tinh_m > 0 else 0.0
-
+    
         matrix_rows_opr_html += f"""
         <tr class="sub-row-1 {tinh_clean_id}" style="display:none; background-color: #fcfcfc; color: #333; font-style: italic;">
             <td style="padding-left: 35px;">↳ % Đúng giờ ({tinh_name})</td>
@@ -845,12 +851,12 @@ def render(file_id: str):
             <td>{tinh_dung_m1:.2f}%</td><td>{tinh_dung_m:.2f}%</td><td>-</td>
         </tr>
         """
-
+    
         tinh_dung1_days_tds = "".join([f"<td>{(t_data['days_dung1'].get(d,0)/t_data['days'].get(d,1)*100 if t_data['days'].get(d,0)>0 else 0):.2f}%</td>" for d in sorted_days_sql])
         tinh_dung1_weeks_tds = "".join([f"<td>{(t_data['weeks_dung1'].get(w,0)/t_data['weeks'].get(w,1)*100 if t_data['weeks'].get(w,0)>0 else 0):.2f}%</td>" for w in sorted_weeks])
         tinh_dung1_m1 = (t_data['months_dung1'].get(sorted_months[0], 0) / tinh_m1 * 100) if tinh_m1 > 0 else 0.0
         tinh_dung1_m = (t_data['months_dung1'].get(sorted_months[1], 0) / tinh_m * 100) if tinh_m > 0 else 0.0
-
+    
         matrix_rows_opr_html += f"""
         <tr class="sub-row-1 {tinh_clean_id}" style="display:none; background-color: #fcfcfc; color: #333; font-style: italic;">
             <td style="padding-left: 35px;">↳ % Đúng giờ lần 1 ({tinh_name})</td>
@@ -859,23 +865,22 @@ def render(file_id: str):
             <td>{tinh_dung1_m1:.2f}%</td><td>{tinh_dung1_m:.2f}%</td><td>-</td>
         </tr>
         """
-
-        # Bưu cục cấp 2
+    
         for bc_name, bc_data in t_data['bcs'].items():
             bc_day_tds = "".join([f"<td>{bc_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
             bc_week_tds = "".join([f"<td>{bc_data['weeks'].get(w, 0):,.0f}</td>" for w in sorted_weeks])
             bc_m1 = bc_data['months'].get(sorted_months[0], 0)
             bc_m = bc_data['months'].get(sorted_months[1], 0)
-
+    
             day_prev_bc = bc_data['days'].get(sorted_days_sql[-2], 0)
             day_cur_bc = bc_data['days'].get(sorted_days_sql[-1], 0)
             dod_bc = ((day_cur_bc - day_prev_bc) / day_prev_bc * 100) if day_prev_bc > 0 else 0.0
-
+    
             wk_prev_bc = bc_data['weeks'].get(sorted_weeks[-2], 0)
             wk_cur_bc = bc_data['weeks'].get(sorted_weeks[-1], 0)
             wow_bc = ((wk_cur_bc - wk_prev_bc) / wk_prev_bc * 100) if wk_prev_bc > 0 else 0.0
             mom_bc = ((bc_m - bc_m1) / bc_m1 * 100) if bc_m1 > 0 else 0.0
-
+    
             matrix_rows_opr_html += f"""
             <tr class="sub-row-2 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
                 <td style="padding-left: 40px;">• Bưu cục thu: <b>{bc_name}</b></td>
@@ -884,7 +889,7 @@ def render(file_id: str):
                 <td>{bc_m1:,.0f}</td><td>{bc_m:,.0f}</td><td class="{ 'text-green' if mom_bc>=0 else 'text-red' }">{mom_bc:+.2f}%</td>
             </tr>
             """
-
+    
     # 7. KHỐI HTML BẢNG MA TRẬN TỔNG HỢP
     matrix_opr_html = f"""
     <!DOCTYPE html>
@@ -903,7 +908,7 @@ def render(file_id: str):
     </style>
     </head>
     <body>
-
+    
     <table class="matrix-table">
         <thead>
             <tr>
@@ -925,9 +930,9 @@ def render(file_id: str):
                 <td>{w_vals_matrix_opr[0]:,.0f}</td><td>{w_vals_matrix_opr[1]:,.0f}</td><td>{w_vals_matrix_opr[2]:,.0f}</td><td>{w_vals_matrix_opr[3]:,.0f}</td><td><b>{w_vals_matrix_opr[4]:,.0f}</b></td><td class="{ 'text-green' if wow_tot>=0 else 'text-red' }">{wow_tot:+.2f}%</td>
                 <td>{m_prev_matrix_opr:,.0f}</td><td><b>{m_current_matrix_opr:,.0f}</b></td><td class="{ 'text-green' if mom_tot>=0 else 'text-red' }">{mom_tot:+.2f}%</td>
             </tr>
-
+    
             {matrix_rows_opr_html}
-
+    
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ</td>
                 {"".join([f"<td>{v:.2f}%</td>" for v in rate_dung_days])}<td>-</td>
@@ -942,7 +947,7 @@ def render(file_id: str):
             </tr>
         </tbody>
     </table>
-
+    
     <script>
         function toggleRow(className, event, btnId) {{
             if (event) event.stopPropagation();
@@ -959,5 +964,5 @@ def render(file_id: str):
     </body>
     </html>
     """
-
+    
     components.html(matrix_opr_html, height=450, scrolling=True)
