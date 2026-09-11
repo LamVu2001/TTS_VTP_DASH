@@ -6,10 +6,10 @@ from tabs.tab_opr.main import render as render_opr
 # Đặt cấu hình trang & Tiêu đề chung ở đây để nó hiện trên tất cả các tabs
 st.set_page_config(page_title="Tiktoks Dashboard", layout="wide")
 
-# Cách dùng st.markdown để tùy chỉnh màu sắc cho tiêu đề
+# Tiêu đề với màu đỏ đồng bộ chuẩn với thanh line phân cách
 st.markdown("""
-    <h2 style="color: #EE4D2D; display: flex; align-items: center; gap: 10px;">
-        <span>🏥</span> SHOPEE DASHBOARD
+    <h2 style="color: #c62828; display: flex; align-items: center; gap: 10px; font-weight: bold;">
+        <span>🏥</span> TIKTOKS DASHBOARD
     </h2>
 """, unsafe_allow_html=True)
 
