@@ -275,67 +275,66 @@ def render(file_id: str):
             st.info("Không có dữ liệu xu hướng.")
 
     with c_opr_right:
-        with c_right:
-    # 1. TIÊU ĐỀ
-    st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
-
-    # 2. TRUY VẤN DỮ LIỆU
-    query_top_failed = f"""
-        SELECT 
-            ma_khgui,
-            COUNT(DISTINCT ma_phieugui) AS tong_sl,
-            COUNT(DISTINCT CASE 
-                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
-                THEN ma_phieugui 
-            END) AS sl_failed,
-            COUNT(DISTINCT CASE 
-                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
-                THEN ma_phieugui 
-            END) AS sl_dung
-        FROM orders 
-        WHERE {where_sql_opr} AND ma_khgui IS NOT NULL AND ma_khgui != ''
-        GROUP BY 1
-        ORDER BY sl_failed DESC, tong_sl DESC
-        LIMIT 10
-    """
+        # 1. TIÊU ĐỀ
+        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
     
-    df_top_failed = con.execute(query_top_failed).df()
-
-    if not df_top_failed.empty:
-        # Render lại bảng HTML chuẩn giao diện custom cũ của bạn
-        rows_html = ""
-        for _, row in df_top_failed.iterrows():
-            rows_html += f"""
-            <tr style="border-bottom: 1px solid #eee;">
-                <td style="padding: 8px; font-weight: bold; text-align: center;">{row['ma_khgui']}</td>
-                <td style="padding: 8px; font-weight: bold; text-align: center;">{row['tong_sl']:,.0f}</td>
-                <td style="padding: 8px; font-weight: bold; text-align: center; color: #c62828;">{row['sl_failed']:,.0f}</td>
-                <td style="padding: 8px; font-weight: bold; text-align: center;">{row['sl_dung']:,.0f}</td>
-            </tr>
-            """
-
-        table_html = f"""
-        <div style="max-height: 350px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                <thead>
-                    <tr style="background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;">
-                        <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">MÃ KHÁCH HÀNG</th>
-                        <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SẢN LƯỢNG THU</th>
-                        <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SL THU FAILED</th>
-                        <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SL THU ĐÚNG GIỜ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows_html}
-                </tbody>
-            </table>
-        </div>
+        # 2. TRUY VẤN DỮ LIỆU
+        query_top_failed = f"""
+            SELECT 
+                ma_khgui,
+                COUNT(DISTINCT ma_phieugui) AS tong_sl,
+                COUNT(DISTINCT CASE 
+                    WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                    THEN ma_phieugui 
+                END) AS sl_failed,
+                COUNT(DISTINCT CASE 
+                    WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                    THEN ma_phieugui 
+                END) AS sl_dung
+            FROM orders 
+            WHERE {where_sql_opr} AND ma_khgui IS NOT NULL AND ma_khgui != ''
+            GROUP BY 1
+            ORDER BY sl_failed DESC, tong_sl DESC
+            LIMIT 10
         """
-        st.markdown(table_html, unsafe_allow_html=True)
-    else:
-        st.info("Không có dữ liệu khách hàng.")   
+        
+        df_top_failed = con.execute(query_top_failed).df()
+    
+        if not df_top_failed.empty:
+            # Render lại bảng HTML chuẩn giao diện custom cũ của bạn
+            rows_html = ""
+            for _, row in df_top_failed.iterrows():
+                rows_html += f"""
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['ma_khgui']}</td>
+                    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['tong_sl']:,.0f}</td>
+                    <td style="padding: 8px; font-weight: bold; text-align: center; color: #c62828;">{row['sl_failed']:,.0f}</td>
+                    <td style="padding: 8px; font-weight: bold; text-align: center;">{row['sl_dung']:,.0f}</td>
+                </tr>
+                """
+    
+            table_html = f"""
+            <div style="max-height: 350px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;">
+                            <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">MÃ KHÁCH HÀNG</th>
+                            <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SẢN LƯỢNG THU</th>
+                            <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SL THU FAILED</th>
+                            <th style="padding: 10px 6px; text-align: center; border-bottom: 2px solid #ccc; font-weight: bold;">SL THU ĐÚNG GIỜ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_html}
+                    </tbody>
+                </table>
+            </div>
+            """
+            st.markdown(table_html, unsafe_allow_html=True)
+        else:
+            st.info("Không có dữ liệu khách hàng.")   
 
     st.divider()
