@@ -202,9 +202,10 @@ def render(file_id: str):
             time_group_sql = "STRFTIME('%d/%m', time_nhap_may)"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
         elif view_type == "Tuần":
+            
             # DuckDB: Trừ đi thứ trong tuần để lùi về Chủ Nhật (Chủ Nhật = 0)
             # dayofweek() trong DuckDB: 0 (Chủ Nhật) -> 6 (Thứ 7)
-            time_group_sql = "STRFTIME('%d/%m', CAST(time_nhap_may AS DATE) - INTERVAL (DAYOFWEEK(CAST(time_nhap_may AS DATE))) DAY)"
+            time_group_sql = "STRFTIME('%d/%m', CAST(DATE_TRUNC('week', CAST(time_nhap_may AS DATE)) AS DATE))"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
         else: # Tháng
             time_group_sql = "STRFTIME('%m/%Y', time_nhap_may)"
