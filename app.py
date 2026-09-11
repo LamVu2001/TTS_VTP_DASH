@@ -11,10 +11,10 @@ st.set_page_config(
 # Cấu hình menu sidebar bên trái
 pg = st.navigation({
     "Tiktoks": [
-        st.Page(render_TTS, title="Tiktoks Dashboard", icon="📊"),
+        st.Page(TTS.py, title="Tiktoks Dashboard", icon="📊"),
     ],
     "Shopee": [
-        st.Page(render_SPE, title="Shopee Dashboard", icon="📁"),
+        st.Page(SPE.py, title="Shopee Dashboard", icon="📁"),
     ]
 })
 
