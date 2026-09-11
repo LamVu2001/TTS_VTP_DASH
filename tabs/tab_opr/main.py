@@ -599,7 +599,7 @@ def render(file_id: str):
     st.divider()
 
     # MA TRẬN CHẤT LƯỢNG
-    st.markdown('<p style="font-size:20px; class="section-red-title">CHẤT LƯỢNG KHÂU THU</p>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">CHẤT LƯỢNG KHÂU THU</div>', unsafe_allow_html=True)
 
     # 1. TRUY VẤN DỮ LIỆU 7 NGÀY GẦN NHẤT (SẢN LƯỢNG)
     days_data_matrix_opr = con.execute(f"""
