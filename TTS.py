@@ -6,8 +6,12 @@ from tabs.tab_opr.main import render as render_opr
 # Đặt cấu hình trang & Tiêu đề chung ở đây để nó hiện trên tất cả các tabs
 st.set_page_config(page_title="Tiktoks Dashboard", layout="wide")
 
-# Tiêu đề hiển thị ở đầu trang
-st.title("🏥 TIKTOKS DASHBOARD")
+# Cách dùng st.markdown để tùy chỉnh màu sắc cho tiêu đề
+st.markdown("""
+    <h2 style="color: #EE4D2D; display: flex; align-items: center; gap: 10px;">
+        <span>🏥</span> SHOPEE DASHBOARD
+    </h2>
+""", unsafe_allow_html=True)
 
 # CSS Định dạng Metric Card
 st.markdown("""
