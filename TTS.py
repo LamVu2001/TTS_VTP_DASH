@@ -4,10 +4,10 @@ from tabs.tab_doanhthu.main import render as render_doanhthu
 from tabs.tab_opr.main import render as render_opr
 
 # Đặt cấu hình trang & Tiêu đề chung ở đây để nó hiện trên tất cả các tabs
-st.set_page_config(page_title="Healthscore Dashboard", layout="wide")
+st.set_page_config(page_title="Tiktoks Dashboard", layout="wide")
 
 # Tiêu đề hiển thị ở đầu trang
-st.title("🏥 HEALTHSCORE DASHBOARD")
+st.title("🏥 TIKTOKS DASHBOARD")
 
 # CSS Định dạng Metric Card
 st.markdown("""
