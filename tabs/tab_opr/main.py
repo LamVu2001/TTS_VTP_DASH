@@ -23,9 +23,7 @@ def render(file_id: str):
     if "opr_kh" not in st.session_state: st.session_state.opr_kh = []
     if "opr_dt" not in st.session_state: st.session_state.opr_dt = []
     if "opr_dv" not in st.session_state: st.session_state.opr_dv = []
-    
-    if "opr_tl" not in st.session_state:
-        st.session_state.opr_tl = st.session_state.get("f_tl", [])
+    if "opr_tl" not in st.session_state: st.session_state.opr_tl = []
 
     # 2. HÀM XỬ LÝ SQL IN CLAUSE
     def sql_in_clause(column_name, selected_list):
@@ -35,7 +33,7 @@ def render(file_id: str):
         vals = ", ".join([f"'{x}'" for x in escaped])
         return f"{column_name} IN ({vals})"
 
-    # 3. HÀM DỰNG MỆNH ĐỀ WHERE CROSS-FILTERING (CẬP NHẬT ĐIỀU KIỆN TRỌNG LƯỢNG MỚI)
+    # 3. HÀM DỰNG MỆNH ĐỀ WHERE CROSS-FILTERING (DÙNG TRỰC TIẾP CỘT nhom_trong_luong)
     def build_where(exclude=None):
         conds = ["1=1"]
         
@@ -56,31 +54,20 @@ def render(file_id: str):
             c = sql_in_clause("ma_dv_viettel", st.session_state.opr_dv)
             if c: conds.append(c)
             
-        # Phân loại trọng lượng khớp 100% hình ảnh mẫu
-        selected_tl = st.session_state.get("opr_tl", [])
-        if exclude != "tl" and selected_tl:
-            tl_conds = []
-            for val in selected_tl:
-                if val == "< 500g":
-                    tl_conds.append("trong_luong < 500")
-                elif val == "500g - < 1000g":
-                    tl_conds.append("trong_luong >= 500 AND trong_luong < 1000")
-                elif val == "1000g - < 2000g":
-                    tl_conds.append("trong_luong >= 1000 AND trong_luong < 2000")
-                elif val == ">= 2000g":
-                    tl_conds.append("trong_luong >= 2000")
-            if tl_conds:
-                conds.append(f"({' OR '.join(tl_conds)})")
+        # Lọc theo cột nhom_trong_luong trong DB
+        if exclude != "tl" and st.session_state.opr_tl:
+            c = sql_in_clause("nhom_trong_luong", st.session_state.opr_tl)
+            if c: conds.append(c)
             
         return " AND ".join(conds)
 
-    # 4. DANH SÁCH TÙY CHỌN BỘ LỌC
+    # 4. DANH SÁCH TÙY CHỌN BỘ LỌC ĐỘNG TỪ DATABASE
     kh_opts = [r[0] for r in con.execute(f"SELECT DISTINCT ma_khgui FROM orders WHERE {build_where('kh')} AND ma_khgui IS NOT NULL ORDER BY 1").fetchall()]
     dt_opts = [r[0] for r in con.execute(f"SELECT DISTINCT ma_doitac FROM orders WHERE {build_where('dt')} AND ma_doitac IS NOT NULL ORDER BY 1").fetchall()]
     dv_opts = [r[0] for r in con.execute(f"SELECT DISTINCT ma_dv_viettel FROM orders WHERE {build_where('dv')} AND ma_dv_viettel IS NOT NULL ORDER BY 1").fetchall()]
     
-    # Khai báo các nhãn đúng như ảnh giao diện của bạn
-    tl_opts = ["1000g - < 2000g", "500g - < 1000g", "< 500g", ">= 2000g"]
+    # Lấy danh sách nhóm trọng lượng động trực tiếp từ cột nhom_trong_luong
+    tl_opts = [r[0] for r in con.execute(f"SELECT DISTINCT nhom_trong_luong FROM orders WHERE {build_where('tl')} AND nhom_trong_luong IS NOT NULL ORDER BY 1").fetchall()]
 
     # 5. GIAO DIỆN BỘ LỌC
     f_opr1, f_opr2, f_opr3, f_opr4, f_opr7 = st.columns(5)
