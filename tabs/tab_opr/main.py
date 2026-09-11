@@ -179,37 +179,54 @@ def render(file_id: str):
     c_opr_left, c_opr_right = st.columns([1.2, 1])
 
     with c_opr_left:
-        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-bottom:10px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
+        # 1. TIÊU ĐỀ & RADIO BUTTON CHỌN TIME VIEW (DÀN NGANG)
+        t_col1, t_col2 = st.columns([2, 1])
+        with t_col1:
+            st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
+        with t_col2:
+            view_type = st.radio("", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="opr_trend_view", label_visibility="collapsed")
     
-        # Truy vấn dữ liệu xu hướng theo ngày nhập máy
+        # 2. XỬ LÝ GOM NHÓM THỜI GIAN THEO ĐÚNG YÊU CẦU
+        # - Tuần: Chủ Nhật (Sunday = 0) đến Thứ 7 (Saturday = 6)
+        if view_type == "Ngày":
+            time_group_sql = "STRFTIME('%d/%m', time_nhap_may)"
+            order_sql = "MIN(CAST(time_nhap_may AS DATE))"
+        elif view_type == "Tuần":
+            # DuckDB/SQLite: strftime('%w') trả về 0 cho CN, 1 cho T2... 6 cho T7 -> Trừ đi số ngày đó để quy về CN đầu tuần
+            time_group_sql = "STRFTIME('%d/%m', DATEADD('day', -CAST(STRFTIME('%w', time_nhap_may) AS INT), CAST(time_nhap_may AS DATE)))"
+            order_sql = "MIN(CAST(time_nhap_may AS DATE))"
+        else: # Tháng
+            time_group_sql = "STRFTIME('%m/%Y', time_nhap_may)"
+            order_sql = "MIN(CAST(time_nhap_may AS DATE))"
+    
+        # 3. TRUY VẤN DỮ LIỆU DUCKDB
         query_trend = f"""
             SELECT 
-                CAST(time_nhap_may AS DATE) AS ngay,
+                {time_group_sql} AS time_label,
                 COUNT(DISTINCT ma_phieugui) AS tong_sl,
                 COUNT(DISTINCT CASE 
                     WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
                       OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
                     THEN ma_phieugui 
-                END) AS sl_dung
+                END) AS sl_dung,
+                {order_sql} AS sort_date
             FROM orders 
             WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
             GROUP BY 1
-            ORDER BY 1
+            ORDER BY sort_date ASC
         """
         df_trend = con.execute(query_trend).df()
     
         if not df_trend.empty:
-            df_trend['ngay_str'] = df_trend['ngay'].astype(str)
             df_trend['ty_le_dung'] = (df_trend['sl_dung'] / df_trend['tong_sl'] * 100).round(1)
     
-            # Tạo biểu đồ kết hợp 2 trục Y (Trục trái: Cột Sản lượng, Trục phải: Đường Tỷ lệ %)
             fig = make_subplots(specs=[[{"secondary_y": True}]])
     
-            # Cột: Sản lượng thu (Màu xám nhạt/xanh nhẹ)
+            # Cột: Sản lượng thu
             fig.add_trace(
                 go.Bar(
-                    x=df_trend['ngay_str'],
+                    x=df_trend['time_label'],
                     y=df_trend['tong_sl'],
                     name="Sản lượng thu",
                     marker_color="#b0bec5",
@@ -218,13 +235,16 @@ def render(file_id: str):
                 secondary_y=False,
             )
     
-            # Đường: Tỷ lệ thu đúng SLA (%) (Màu đỏ chủ đạo)
+            # Đường: Tỷ lệ thu đúng SLA (%)
+            # Chỉ hiện text trên điểm khi chế độ xem là Tuần hoặc Tháng (hoặc Ngày ít dữ liệu) để tránh đè chữ
+            show_text_mode = "lines+markers+text" if (view_type != "Ngày" or len(df_trend) <= 10) else "lines+markers"
+            
             fig.add_trace(
                 go.Scatter(
-                    x=df_trend['ngay_str'],
+                    x=df_trend['time_label'],
                     y=df_trend['ty_le_dung'],
                     name="Tỷ lệ thu đúng SLA (%)",
-                    mode="lines+markers+text",
+                    mode=show_text_mode,
                     line=dict(color="#c62828", width=3),
                     marker=dict(size=6, color="#c62828"),
                     text=[f"{v:.1f}%" for v in df_trend['ty_le_dung']],
@@ -233,9 +253,8 @@ def render(file_id: str):
                 secondary_y=True,
             )
     
-            # Cấu hình giao diện chuẩn phong cách ODR Dashboard
             fig.update_layout(
-                margin=dict(l=10, r=10, t=20, b=20),
+                margin=dict(l=10, r=10, t=10, b=10),
                 height=320,
                 hovermode="x unified",
                 legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
@@ -243,7 +262,7 @@ def render(file_id: str):
                 paper_bgcolor="white"
             )
     
-            fig.update_xaxes(showgrid=False)
+            fig.update_xaxes(showgrid=False, type='category')
             fig.update_yaxes(title_text="Sản lượng", secondary_y=False, showgrid=True, gridcolor="#eee")
             fig.update_yaxes(title_text="Tỷ lệ (%)", secondary_y=True, showgrid=False, range=[0, 110])
     
