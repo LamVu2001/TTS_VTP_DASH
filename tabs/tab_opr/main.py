@@ -180,7 +180,7 @@ def render(file_id: str):
 
     with c_opr_left:
         # 1. TIÊU ĐỀ
-        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
     
         # 2. BỘ CHỌN TIME VIEW (TRÊN BIỂU ĐỒ)
         view_type = st.radio("", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="opr_trend_view", label_visibility="collapsed")
@@ -258,7 +258,7 @@ def render(file_id: str):
                 legend=dict(
                     orientation="h", 
                     yanchor="top", 
-                    y=-0.45, 
+                    y=-0.30, 
                     xanchor="center", 
                     x=0.5
                 ),
@@ -275,65 +275,49 @@ def render(file_id: str):
             st.info("Không có dữ liệu xu hướng.")
 
     with c_opr_right:
-        st.markdown('<p class="section-red-title">TOP 10 ĐỐI TÁC TỒN THU CUỐI NGÀY CAO NHẤT</p>', unsafe_allow_html=True)
-        
-        top_dt_data = con.execute(f"""
-            SELECT COALESCE(ma_doitac, 'Khác') as dt, COUNT(ma_phieugui) as sl
-            FROM orders WHERE {where_sql_opr} AND ma_doitac IS NOT NULL
-            GROUP BY ma_doitac ORDER BY sl DESC LIMIT 10
-        """).fetchall()
+        # 1. TIÊU ĐỀ BẢNG TOP 10
+    st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
 
-        top_kh_data = con.execute(f"""
-            SELECT COALESCE(ma_khgui, 'Khác') as kh, COUNT(ma_phieugui) as sl
-            FROM orders WHERE {where_sql_opr} AND ma_khgui IS NOT NULL
-            GROUP BY ma_khgui ORDER BY sl DESC LIMIT 10
-        """).fetchall()
+    # 2. TRUY VẤN DỮ LIỆU TOP 10 MÃ KHÁCH HÀNG
+    query_top_failed = f"""
+        SELECT 
+            ma_khgui AS "MÃ KHÁCH HÀNG",
+            COUNT(DISTINCT ma_phieugui) AS "SẢN LƯỢNG THU",
+            COUNT(DISTINCT CASE 
+                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                THEN ma_phieugui 
+            END) AS "SL THU FAILED",
+            COUNT(DISTINCT CASE 
+                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                THEN ma_phieugui 
+            END) AS "SL THU ĐÚNG GIỜ"
+        FROM orders 
+        WHERE {where_sql_opr} AND ma_khgui IS NOT NULL AND ma_khgui != ''
+        GROUP BY 1
+        ORDER BY "SL THU FAILED" DESC, "SẢN LƯỢNG THU" DESC
+        LIMIT 10
+    """
+    
+    df_top_failed = con.execute(query_top_failed).df()
 
-        rows_top_html = ""
-        for i in range(max(len(top_dt_data), len(top_kh_data))):
-            dt_name = top_dt_data[i][0] if i < len(top_dt_data) else "-"
-            dt_sl = f"{top_dt_data[i][1]:,.0f}" if i < len(top_dt_data) else "-"
-            kh_name = top_kh_data[i][0] if i < len(top_kh_data) else "-"
-            kh_sl = f"{top_kh_data[i][1]:,.0f}" if i < len(top_kh_data) else "-"
+    if not df_top_failed.empty:
+        # Định dạng định dạng số nguyên có dấu phẩy (vd: 1,000,000)
+        df_display = df_top_failed.copy()
+        df_display["SẢN LƯỢNG THU"] = df_display["SẢN LƯỢNG THU"].map("{:,.0f}".format)
+        df_display["SL THU FAILED"] = df_display["SL THU FAILED"].map("{:,.0f}".format)
+        df_display["SL THU ĐÚNG GIỜ"] = df_display["SL THU ĐÚNG GIỜ"].map("{:,.0f}".format)
 
-            rows_top_html += f"""
-            <tr>
-                <td><b>{dt_name}</b></td><td class="val-red">{dt_sl}</td>
-                <td><b>{kh_name}</b></td><td class="val-red">{kh_sl}</td>
-            </tr>
-            """
-
-        html_top10_opr = f"""
-        <style>
-            .tbl-top10 {{ 
-                width: 100%; 
-                border-collapse: collapse; 
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                font-size: 11.5px; 
-                background: #fafafa; 
-                border: 1px solid #e0e0e0; 
-            }}
-            .tbl-top10 th {{ background: #f0f0f0; color: #333; padding: 6px; text-align: center; font-weight: bold; border-bottom: 1px solid #ccc; }}
-            .tbl-top10 td {{ padding: 5px 10px; border-bottom: 1px solid #eee; text-align: center; color: #111; }}
-            .val-red {{ color: #c62828; font-weight: bold; }}
-            .table-container-top {{ max-height: 250px; overflow-y: auto; }}
-        </style>
-        <div class="table-container-top">
-            <table class="tbl-top10">
-                <thead>
-                    <tr>
-                        <th style="width: 30%;">MÃ ĐỐI TÁC</th>
-                        <th style="width: 20%;">SẢN LƯỢNG</th>
-                        <th style="width: 30%;">MÃ KH</th>
-                        <th style="width: 20%;">SẢN LƯỢNG</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows_top_html if rows_top_html else "<tr><td colspan='4'>Không có dữ liệu</td></tr>"}
-                </tbody>
-            </table>
-        </div>
-        """
-        components.html(html_top10_opr, height=290, scrolling=False)
+        # Hiển thị DataFrame dưới dạng bảng HTML tùy biến CSS cho khớp giao diện
+        st.dataframe(
+            df_display,
+            use_container_width=True,
+            hide_index=True,
+            height=360
+        )
+    else:
+        st.info("Không có dữ liệu khách hàng.")
 
     st.divider()
