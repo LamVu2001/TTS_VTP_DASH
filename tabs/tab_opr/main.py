@@ -276,8 +276,8 @@ def render(file_id: str):
             st.info("Không có dữ liệu xu hướng.")
 
     with c_opr_right:
-          # 1. TIÊU ĐỀ
-        st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
+        # 1. TIÊU ĐỀ
+        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">TOP 10 KHÁCH HÀNG CÓ SẢN LƯỢNG THU FAILED CAO NHẤT</div>', unsafe_allow_html=True)
     
         # 2. TRUY VẤN DỮ LIỆU
         query_top_failed = f"""
@@ -307,17 +307,18 @@ def render(file_id: str):
         if not df_top_failed.empty:
             rows_html = ""
             for _, row in df_top_failed.iterrows():
-                ty_le_failed = (row['sl_failed'] / row['tong_sl'] * 100) if row['tong_sl'] > 0 else 0
+                # Tính tỷ lệ thu thành công (%)
+                ty_le_thanh_cong = (row['sl_dung'] / row['tong_sl'] * 100) if row['tong_sl'] > 0 else 0
                 
                 rows_html += f"""<tr style="border-bottom: 1px solid #e0e0e0;">
     <td style="padding: 7px 4px; font-weight: bold; text-align: center; border-right: 1px solid #eee;">{row['ma_khgui']}</td>
     <td style="padding: 7px 4px; font-weight: bold; text-align: center; border-right: 1px solid #eee;">{row['tong_sl']:,.0f}</td>
     <td style="padding: 7px 4px; font-weight: bold; text-align: center; color: #c62828; border-right: 1px solid #eee;">{row['sl_failed']:,.0f}</td>
     <td style="padding: 7px 4px; font-weight: bold; text-align: center; border-right: 1px solid #eee;">{row['sl_dung']:,.0f}</td>
-    <td style="padding: 7px 4px; font-weight: bold; text-align: center; color: #c62828;">{ty_le_failed:.1f}%</td>
+    <td style="padding: 7px 4px; font-weight: bold; text-align: center; color: #2e7d32;">{ty_le_thanh_cong:.1f}%</td>
     </tr>"""
     
-            # Header nền đen (#1e1e1e), chữ trắng, đường kẻ dọc ngăn cách giữa các cột
+            # Header nền đen (#1e1e1e), chữ trắng, đổi tên cột cuối thành Tỷ Lệ Thành Công
             raw_table_html = f"""
     <div style="border: 1px solid #ccc; border-radius: 6px; overflow: hidden;">
         <table style="width: 100%; border-collapse: collapse; font-size: 12px; font-family: sans-serif;">
@@ -327,7 +328,7 @@ def render(file_id: str):
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">SL Thu</th>
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Failed SLA</th>
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Đúng Giờ</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ Lệ Failed</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ Lệ Thành Công</th>
                 </tr>
             </thead>
             <tbody>
@@ -338,7 +339,6 @@ def render(file_id: str):
     """
             st.markdown(textwrap.dedent(raw_table_html), unsafe_allow_html=True)
         else:
-            # Style box "Không có dữ liệu" y hệt mẫu
             no_data_html = """
     <div style="border: 1px solid #ccc; border-radius: 6px; overflow: hidden;">
         <table style="width: 100%; border-collapse: collapse; font-size: 12px; font-family: sans-serif;">
@@ -348,7 +348,7 @@ def render(file_id: str):
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">SL Thu</th>
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Failed SLA</th>
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Đúng Giờ</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ Lệ Failed</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ Lệ Thành Công</th>
                 </tr>
             </thead>
             <tbody>
