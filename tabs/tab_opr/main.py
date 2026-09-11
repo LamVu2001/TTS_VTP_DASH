@@ -369,10 +369,10 @@ def render(file_id: str):
         unsafe_allow_html=True
     )
     
-    # 1. TRUY VẤN DỮ LIỆU CHI NHÁNH (tinh_thu)
+    # 1. TRUY VẤN DỮ LIỆU CHI NHÁNH (tinh_nhan)
     cn_data_raw = con.execute(f"""
         SELECT 
-            tinh_thu AS cn,
+            tinh_nhan AS cn,
             COUNT(DISTINCT ma_phieugui) AS tong_sl,
             COUNT(DISTINCT CASE 
                 WHEN LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
@@ -389,16 +389,16 @@ def render(file_id: str):
                 THEN ma_phieugui 
             END) AS sl_dung
         FROM orders 
-        WHERE {where_sql_opr} AND tinh_thu IS NOT NULL AND tinh_thu != ''
-        GROUP BY tinh_thu 
-        ORDER BY tinh_thu ASC
+        WHERE {where_sql_opr} AND tinh_nhan IS NOT NULL AND tinh_nhan != ''
+        GROUP BY tinh_nhan 
+        ORDER BY tinh_nhan ASC
     """).fetchall()
     
-    # 2. TRUY VẤN DỮ LIỆU BƯU CỤC (ma_buucuc_goc + tinh_thu)
+    # 2. TRUY VẤN DỮ LIỆU BƯU CỤC (ma_buucuc_goc + tinh_nhan)
     bc_data_raw = con.execute(f"""
         SELECT 
             ma_buucuc_goc AS bc, 
-            tinh_thu AS cn,
+            tinh_nhan AS cn,
             COUNT(DISTINCT ma_phieugui) AS tong_sl,
             COUNT(DISTINCT CASE 
                 WHEN LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
@@ -415,8 +415,8 @@ def render(file_id: str):
                 THEN ma_phieugui 
             END) AS sl_dung
         FROM orders 
-        WHERE {where_sql_opr} AND tinh_thu IS NOT NULL AND ma_buucuc_goc IS NOT NULL
-        GROUP BY ma_buucuc_goc, tinh_thu 
+        WHERE {where_sql_opr} AND tinh_nhan IS NOT NULL AND ma_buucuc_goc IS NOT NULL
+        GROUP BY ma_buucuc_goc, tinh_nhan 
         ORDER BY ma_buucuc_goc ASC
     """).fetchall()
     
@@ -437,7 +437,7 @@ def render(file_id: str):
     <td style="font-weight: bold; color: #2e7d32;">{ty_le_dung:.1f}%</td>
     </tr>"""
     
-    # 4. RENDER HÀNG DỮ LIỆU BƯU CỤC (Đổi vị trí Chi nhánh lên trước, Bưu cục ra sau)
+    # 4. RENDER HÀNG DỮ LIỆU BƯU CỤC (Chi nhánh trước, Bưu cục sau)
     rows_bc_html = ""
     for item in bc_data_raw:
         bc_code = item[0]
