@@ -154,21 +154,44 @@ def render(file_id: str):
 
     st.write("")
 
-    # 7. CSS & METRIC CARDS (DÀN NGANG 6 CỘT - ĐÃ BỎ ĐỌAN SUBTITLE XANH/ĐỎ)
+    # 7. CSS & METRIC CARDS (CHỮ VÀ SỐ TO HƠN, KÉO GẦN LẠI)
     st.markdown("""
         <style>
+        /* Giảm khoảng cách phía dưới các widget bộ lọc */
+        div[data-testid="stHorizontalBlock"] {
+            margin-bottom: -10px !important; 
+        }
+        .element-container {
+            margin-bottom: -5px !important;
+        }
+        
         .metric-card {
             background-color: #f8f9fa;
             border-radius: 8px;
-            padding: 16px 8px;
+            padding: 14px 8px; 
             text-align: center;
             border: 1px solid #e0e0e0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
-        .metric-title { font-size: 11px; font-weight: bold; color: #555; text-transform: uppercase; white-space: nowrap; }
-        .metric-value { font-size: 20px; font-weight: bold; color: #111; margin-top: 6px; }
+        /* Tăng kích thước chữ tiêu đề lên 12.5px */
+        .metric-title { 
+            font-size: 12.5px; 
+            font-weight: bold; 
+            color: #444; 
+            text-transform: uppercase; 
+            white-space: nowrap; 
+        }
+        /* Tăng kích thước số liệu lên 26px cho đậm nét, nổi bật */
+        .metric-value { 
+            font-size: 26px; 
+            font-weight: bold; 
+            color: #111; 
+            margin-top: 6px; 
+        }
         </style>
     """, unsafe_allow_html=True)
+
+    st.write("") 
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
 
