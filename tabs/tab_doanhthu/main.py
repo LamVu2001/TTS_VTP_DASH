@@ -127,7 +127,8 @@ def render(file_id=None):
     # CỘT TRÁI: BIỂU ĐỒ XU HƯỚNG DOANH THU
     # ---------------------------------------------------------
     with c_dt_chart:
-        st.subheader("📈 XU HƯỚNG DOANH THU (TỶ ĐỒNG)")
+        st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">XU HƯỚNG DOANH THU</div>', unsafe_allow_html=True)
+
 
         time_view_dt = st.radio(
             "Chế độ xem:",
@@ -198,7 +199,7 @@ def render(file_id=None):
     # CỘT PHẢI: BẢNG TOP 10 KHÁCH HÀNG (FULL SỐ DOANH THU)
     # ---------------------------------------------------------
     with c_dt_right:
-        st.subheader("📊 TOP 10 KHÁCH HÀNG DOANH THU")
+        st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">TOP 10 DOANH THU THEO KHÁCH HÀNG</div>', unsafe_allow_html=True)
 
         try:
             # Lấy đầy đủ số tiền thực tế (SUM tong_cuoc không chia cho 1e6 hay 1e9)
@@ -240,7 +241,7 @@ def render(file_id=None):
     # ---------------------------------------------------------
     # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (LÀM TRÒN DT & FIX BUNG CÂY)
     # ---------------------------------------------------------
-    st.subheader("BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG")
+    st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG</div>', unsafe_allow_html=True)
 
     try:
         from collections import defaultdict
