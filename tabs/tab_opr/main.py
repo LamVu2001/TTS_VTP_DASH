@@ -364,45 +364,54 @@ def render(file_id: str):
     st.divider()
     
     # 4. DANH SÁCH CHI NHÁNH & BƯU CỤC THỰC HIỆN
-    st.markdown('<p class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC THU (BẤM CHỌN DÒNG CHI NHÁNH BÊN TRÁI ĐỂ LỌC BƯU CỤC BÊN PHẢI)</p>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC THU (BẤM CHỌN DÒNG CHI NHÁNH BÊN TRÁI ĐỂ LỌC BƯU CỤC BÊN PHẢI)</p>',
+        unsafe_allow_html=True
+    )
     
-    # 1. Truy vấn dữ liệu Chi nhánh (tinh_phat)
+    # 1. TRUY VẤN DỮ LIỆU CHI NHÁNH (tinh_phat)
     cn_data_raw = con.execute(f"""
         SELECT 
             tinh_phat AS cn,
             COUNT(DISTINCT ma_phieugui) AS tong_sl,
             COUNT(DISTINCT CASE 
-                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                WHEN LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%fail%'
+                  OR CAST(danh_gia AS VARCHAR) IN ('0', 'false', 'FALSE')
                 THEN ma_phieugui 
             END) AS sl_failed,
             COUNT(DISTINCT CASE 
-                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                WHEN LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
                   OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%pass%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%ok%'
+                  OR CAST(danh_gia AS VARCHAR) IN ('1', 'true', 'TRUE')
                 THEN ma_phieugui 
             END) AS sl_dung
         FROM orders 
-        WHERE {where_sql_opr} AND tinh_phat IS NOT NULL
+        WHERE {where_sql_opr} AND tinh_phat IS NOT NULL AND tinh_phat != ''
         GROUP BY tinh_phat 
         ORDER BY tinh_phat ASC
     """).fetchall()
     
-    # 2. Truy vấn dữ liệu Bưu cục (ma_buucuc_phat)
+    # 2. TRUY VẤN DỮ LIỆU BƯU CỤC (ma_buucuc_phat)
     bc_data_raw = con.execute(f"""
         SELECT 
             ma_buucuc_phat AS bc, 
             tinh_phat AS cn,
             COUNT(DISTINCT ma_phieugui) AS tong_sl,
             COUNT(DISTINCT CASE 
-                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                WHEN LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%fail%'
+                  OR CAST(danh_gia AS VARCHAR) IN ('0', 'false', 'FALSE')
                 THEN ma_phieugui 
             END) AS sl_failed,
             COUNT(DISTINCT CASE 
-                WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
-                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                WHEN LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
                   OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%pass%'
+                  OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%ok%'
+                  OR CAST(danh_gia AS VARCHAR) IN ('1', 'true', 'TRUE')
                 THEN ma_phieugui 
             END) AS sl_dung
         FROM orders 
@@ -411,7 +420,7 @@ def render(file_id: str):
         ORDER BY ma_buucuc_phat ASC
     """).fetchall()
     
-    # 3. Render HTML Rows cho Chi nhánh
+    # 3. RENDER HÀNG DỮ LIỆU CHI NHÁNH
     rows_cn_html = ""
     for item in cn_data_raw:
         cn_code = item[0]
@@ -420,17 +429,15 @@ def render(file_id: str):
         sl_dung = item[3] or 0
         ty_le_dung = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0
     
-        rows_cn_html += f"""
-        <tr class="cn-row" data-cn="{cn_code}" onclick="filterBC('{cn_code}', this)">
-            <td style="font-weight: bold; cursor: pointer;">{cn_code}</td>
-            <td>{tong_sl:,.0f}</td>
-            <td class="text-red">{sl_failed:,.0f}</td>
-            <td>{sl_dung:,.0f}</td>
-            <td style="font-weight: bold; color: #2e7d32;">{ty_le_dung:.1f}%</td>
-        </tr>
-        """
+        rows_cn_html += f"""<tr class="cn-row" data-cn="{cn_code}" onclick="filterBC('{cn_code}', this)">
+    <td style="font-weight: bold; cursor: pointer;">{cn_code}</td>
+    <td>{tong_sl:,.0f}</td>
+    <td class="text-red">{sl_failed:,.0f}</td>
+    <td>{sl_dung:,.0f}</td>
+    <td style="font-weight: bold; color: #2e7d32;">{ty_le_dung:.1f}%</td>
+    </tr>"""
     
-    # 4. Render HTML Rows cho Bưu cục
+    # 4. RENDER HÀNG DỮ LIỆU BƯU CỤC
     rows_bc_html = ""
     for item in bc_data_raw:
         bc_code = item[0]
@@ -440,18 +447,16 @@ def render(file_id: str):
         sl_dung = item[4] or 0
         ty_le_dung = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0
     
-        rows_bc_html += f"""
-        <tr class="bc-row" data-cn="{cn_code}">
-            <td style="font-weight: bold;">{bc_code}</td>
-            <td style="font-weight: bold;">{cn_code}</td>
-            <td>{tong_sl:,.0f}</td>
-            <td class="text-red">{sl_failed:,.0f}</td>
-            <td>{sl_dung:,.0f}</td>
-            <td style="font-weight: bold; color: #2e7d32;">{ty_le_dung:.1f}%</td>
-        </tr>
-        """
+        rows_bc_html += f"""<tr class="bc-row" data-cn="{cn_code}">
+    <td style="font-weight: bold;">{bc_code}</td>
+    <td style="font-weight: bold;">{cn_code}</td>
+    <td>{tong_sl:,.0f}</td>
+    <td class="text-red">{sl_failed:,.0f}</td>
+    <td>{sl_dung:,.0f}</td>
+    <td style="font-weight: bold; color: #2e7d32;">{ty_le_dung:.1f}%</td>
+    </tr>"""
     
-    # 5. Giao diện HTML / JS tương tác
+    # 5. TẠO KHỐI HTML + JAVASCRIPT HIỂN THỊ
     interactive_tables_html = f"""
     <!DOCTYPE html>
     <html>
@@ -481,8 +486,8 @@ def render(file_id: str):
         }}
         th {{
             position: sticky; top: 0; z-index: 10;
-            background-color: #222222; color: #ffffff;
-            text-align: center; padding: 7px 4px;
+            background-color: #1e1e1e; color: #ffffff;
+            text-align: center; padding: 8px 4px;
             border-bottom: 1px solid #444; border-right: 1px solid #444;
             font-weight: bold;
         }}
@@ -590,5 +595,5 @@ def render(file_id: str):
     </html>
     """
     
-    components.html(interactive_tables_html, height=410, scrolling=False)
+    components.html(textwrap.dedent(interactive_tables_html), height=410, scrolling=False)
     st.divider()
