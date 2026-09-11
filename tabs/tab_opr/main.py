@@ -97,7 +97,6 @@ def render(file_id: str):
     where_sql_opr = build_where()
     
     try:
-        # Chuẩn hóa dữ liệu cột danh_gia về dạng chữ không dấu để so sánh chuẩn tuyệt đối
         query_kpi = f"""
             SELECT 
                 COUNT(DISTINCT ma_phieugui) AS tong_sl,
@@ -130,46 +129,48 @@ def render(file_id: str):
         sl_sai = res[2] or 0
         sl_dung_lan1 = res[3] or 0
 
-        # Nếu vẫn bằng 0 do DB lưu kiểu khác, fallback lấy Tổng trừ Sai
         if sl_dung == 0 and sl_sai > 0 and tong_sl > sl_sai:
             sl_dung = tong_sl - sl_sai
 
         ty_le_dung_gio = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0.0
         ty_le_dung_lan1 = (sl_dung_lan1 / tong_sl * 100) if tong_sl > 0 else 0.0
+        ty_le_failed = (sl_sai / tong_sl * 100) if tong_sl > 0 else 0.0
 
-    except Exception as e:
+    except Exception:
         tong_sl = sl_dung = sl_sai = 0
-        ty_le_dung_gio = ty_le_dung_lan1 = 0.0
+        ty_le_dung_gio = ty_le_dung_lan1 = ty_le_failed = 0.0
 
-    # 7. CSS & METRIC CARDS (DÀN NGANG 5 CỘT)
+    st.write("")
+
+    # 7. CSS & METRIC CARDS (DÀN NGANG 6 CỘT - ĐÃ BỎ ĐỌAN SUBTITLE XANH/ĐỎ)
     st.markdown("""
         <style>
         .metric-card {
             background-color: #f8f9fa;
             border-radius: 8px;
-            padding: 12px 8px;
+            padding: 16px 8px;
             text-align: center;
             border: 1px solid #e0e0e0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .metric-title { font-size: 11px; font-weight: bold; color: #555; text-transform: uppercase; white-space: nowrap; }
-        .metric-value { font-size: 20px; font-weight: bold; color: #111; margin: 4px 0; }
-        .metric-sub-green { font-size: 11px; color: #2e7d32; font-weight: 500; }
-        .metric-sub-red { font-size: 11px; color: #c62828; font-weight: 500; }
+        .metric-value { font-size: 20px; font-weight: bold; color: #111; margin-top: 6px; }
         </style>
     """, unsafe_allow_html=True)
 
-    k1, k2, k3, k4, k5 = st.columns(5)
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
 
     with k1:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG THU</div><div class="metric-value">{tong_sl:,.0f}</div><div class="metric-sub-green">▲ Tổng đơn</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SẢN LƯỢNG THU</div><div class="metric-value">{tong_sl:,.0f}</div></div>', unsafe_allow_html=True)
     with k2:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SL THU ĐÚNG SLA</div><div class="metric-value">{sl_dung:,.0f}</div><div class="metric-sub-green">▲ Đánh giá Đúng</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SL THU ĐÚNG SLA</div><div class="metric-value">{sl_dung:,.0f}</div></div>', unsafe_allow_html=True)
     with k3:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">SL THU SAI SLA</div><div class="metric-value">{sl_sai:,.0f}</div><div class="metric-sub-red">▼ Đánh giá Sai</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">SL THU SAI SLA</div><div class="metric-value">{sl_sai:,.0f}</div></div>', unsafe_allow_html=True)
     with k4: 
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐÚNG GIỜ</div><div class="metric-value">{ty_le_dung_gio:.1f}%</div><div class="metric-sub-green">▲ Đúng / Tổng</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐÚNG GIỜ</div><div class="metric-value">{ty_le_dung_gio:.1f}%</div></div>', unsafe_allow_html=True)
     with k5:
-        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐG LẦN 1</div><div class="metric-value">{ty_le_dung_lan1:.1f}%</div><div class="metric-sub-green">▲ Đúng Lần 1 / Tổng</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU ĐG LẦN 1</div><div class="metric-value">{ty_le_dung_lan1:.1f}%</div></div>', unsafe_allow_html=True)
+    with k6:
+        st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ FAILED</div><div class="metric-value">{ty_le_failed:.1f}%</div></div>', unsafe_allow_html=True)
 
     st.write("")
