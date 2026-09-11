@@ -673,8 +673,7 @@ def render(file_id: str):
     wk_cur_tot = w_vals_matrix_opr[-1]
     wow_tot = ((wk_cur_tot - wk_prev_tot) / wk_prev_tot * 100) if wk_prev_tot > 0 else 0.0
 
-    # 4. TRUY VẤN TỶ LỆ TỔNG THEO NGÀY CHO 2 DÒNG DƯỚI
-    # Ngày -> Đúng giờ
+    # 4. TRUY VẤN TỶ LỆ TỔNG THEO NGÀY CHO 2 DÒNG DƯỚI (Đã đổi sang time_thulan2 & time_thulan3)
     dung_day_tot = con.execute(f"""
         SELECT DATE(time_nhap_may), COUNT(*) 
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
@@ -682,15 +681,13 @@ def render(file_id: str):
     """).fetchall()
     dung_day_dict = {str(r[0]): r[1] for r in dung_day_tot}
 
-    # Ngày -> Đúng giờ lần 1 (timenhaplan2 & lan3 null)
     dung1_day_tot = con.execute(f"""
         SELECT DATE(time_nhap_may), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND timenhaplan2 IS NULL AND timenhaplan3 IS NULL
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL
         GROUP BY DATE(time_nhap_may)
     """).fetchall()
     dung1_day_dict = {str(r[0]): r[1] for r in dung1_day_tot}
 
-    # Tuần -> Đúng giờ & Đúng giờ lần 1
     dung_week_tot = con.execute(f"""
         SELECT STRFTIME(DATE(time_nhap_may), '%W'), COUNT(*) 
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
@@ -700,12 +697,11 @@ def render(file_id: str):
 
     dung1_week_tot = con.execute(f"""
         SELECT STRFTIME(DATE(time_nhap_may), '%W'), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND timenhaplan2 IS NULL AND timenhaplan3 IS NULL
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL
         GROUP BY STRFTIME(DATE(time_nhap_may), '%W')
     """).fetchall()
     dung1_w_dict = {r[0]: r[1] for r in dung1_week_tot}
 
-    # Tháng -> Đúng giờ & Đúng giờ lần 1
     dung_m_tot = con.execute(f"""
         SELECT STRFTIME(DATE(time_nhap_may), '%m'), COUNT(*) 
         FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung'
@@ -715,7 +711,7 @@ def render(file_id: str):
 
     dung1_m_tot = con.execute(f"""
         SELECT STRFTIME(DATE(time_nhap_may), '%m'), COUNT(*) 
-        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND timenhaplan2 IS NULL AND timenhaplan3 IS NULL
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL AND danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL
         GROUP BY STRFTIME(DATE(time_nhap_may), '%m')
     """).fetchall()
     dung1_m_dict = {r[0]: r[1] for r in dung1_m_tot}
@@ -746,7 +742,7 @@ def render(file_id: str):
             STRFTIME(DATE(time_nhap_may), '%m') as thang,
             COUNT(*) as sl,
             SUM(CASE WHEN danh_gia = 'Dung' THEN 1 ELSE 0 END) as sl_dung,
-            SUM(CASE WHEN danh_gia = 'Dung' AND timenhaplan2 IS NULL AND timenhaplan3 IS NULL THEN 1 ELSE 0 END) as sl_dung1
+            SUM(CASE WHEN danh_gia = 'Dung' AND time_thulan2 IS NULL AND time_thulan3 IS NULL THEN 1 ELSE 0 END) as sl_dung1
         FROM orders 
         WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
         GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may), STRFTIME(DATE(time_nhap_may), '%W'), STRFTIME(DATE(time_nhap_may), '%m')
