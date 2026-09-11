@@ -599,12 +599,13 @@ def render(file_id: str):
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
 
-    # 1. TRUY VẤN 7 NGÀY GẦN NHẤT
+    # 1. TRUY VẤN 7 NGÀY GẦN NHẤT (Chuyển time_nhap_may sang DATE)
     days_data_matrix_opr = con.execute(f"""
-        SELECT clean_date, COUNT(*) as sl 
+        SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
         FROM orders 
-        WHERE {where_sql_opr} AND clean_date IS NOT NULL 
-        GROUP BY clean_date ORDER BY clean_date DESC LIMIT 7
+        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
+        GROUP BY DATE(time_nhap_may) 
+        ORDER BY clean_date DESC LIMIT 7
     """).fetchall()
 
     days_dict_matrix_opr = {row[0].strftime('%d/%m'): row[1] for row in days_data_matrix_opr}
@@ -616,7 +617,7 @@ def render(file_id: str):
     # 2. TRUY VẤN TỔNG SẢN LƯỢNG THÁNG
     m_current_matrix_opr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr}").fetchone()[0]
 
-    # 3. TRUY VẤN DRILL-DOWN (Đã cập nhật đúng tinh_nhan & ma_buucuc_goc)
+    # 3. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (Đối tác -> Tỉnh/Chi nhánh -> Bưu cục)
     all_tree_matrix_opr = con.execute(f"""
         SELECT 
             COALESCE(ma_doitac, 'Khác') as dt,
@@ -639,7 +640,7 @@ def render(file_id: str):
         tree_struct_matrix_opr[dt]['tinhs'][tinh]['sl'] += sl
         tree_struct_matrix_opr[dt]['tinhs'][tinh]['bcs'][bc] = sl
 
-    # 4. RENDER CÁC HÀNG DRILL-DOWN DỮ LIỆU
+    # 4. RENDER CÁC HÀNG DRILL-DOWN DỮ LIỆU HTML
     matrix_rows_opr_html = ""
     for idx_dt, (dt_name, dt_data) in enumerate(tree_struct_matrix_opr.items()):
         dt_sl = dt_data['sl']
@@ -683,7 +684,7 @@ def render(file_id: str):
                 </tr>
                 """
 
-    # 5. KHỐI HTML BẢNG MA TRẬN CHUẨN ODR
+    # 5. CẤU TRÚC BẢNG MA TRẬN ODR KHÂU THU
     matrix_opr_html = f"""
     <!DOCTYPE html>
     <html>
@@ -719,7 +720,6 @@ def render(file_id: str):
             </tr>
         </thead>
         <tbody>
-            <!-- GỐC SẢN LƯỢNG PHẢI THU + DRILL DOWN -->
             <tr class="row-group" onclick="toggleRow('group_root_opr', event, 'btn_root_opr')">
                 <td><span class="toggle-btn" id="btn_root_opr">[+]</span> <b>Sản lượng phải thu</b></td>
                 <td style="text-align: center;">-</td>
@@ -731,7 +731,6 @@ def render(file_id: str):
 
             {matrix_rows_opr_html}
 
-            <!-- CHỈ TIÊU CHẤT LƯỢNG KHÂU THU -->
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ</td>
                 <td style="text-align: center;">99.00</td>
