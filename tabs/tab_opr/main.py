@@ -599,7 +599,7 @@ def render(file_id: str):
     # 5. BÁO CÁO MA TRẬN CHẤT LƯỢNG KHÂU THU
     st.markdown('<p class="section-red-title">MA TRẬN CHẤT LƯỢNG KHÂU THU (DRILL-DOWN DỮ LIỆU)</p>', unsafe_allow_html=True)
 
-    # 1. TRUY VẤN 7 NGÀY GẦN NHẤT (Chuyển time_nhap_may sang DATE)
+    # 1. TRUY VẤN 7 NGÀY GẦN NHẤT (LẤY DANH SÁCH NGÀY CHUẨN)
     days_data_matrix_opr = con.execute(f"""
         SELECT DATE(time_nhap_may) as clean_date, COUNT(*) as sl 
         FROM orders 
@@ -608,83 +608,84 @@ def render(file_id: str):
         ORDER BY clean_date DESC LIMIT 7
     """).fetchall()
 
-    days_dict_matrix_opr = {row[0].strftime('%d/%m'): row[1] for row in days_data_matrix_opr}
-    sorted_days_matrix_opr = sorted(list(days_dict_matrix_opr.keys()))
-    while len(sorted_days_matrix_opr) < 7:
-        sorted_days_matrix_opr.insert(0, "--/--")
-    d_vals_matrix_opr = [days_dict_matrix_opr.get(d, 0) for d in sorted_days_matrix_opr]
+    days_dict_matrix_opr = {row[0].strftime('%Y-%m-%d'): row[1] for row in days_data_matrix_opr}
+    sorted_days_sql = sorted(list(days_dict_matrix_opr.keys()))
+    
+    # Chuẩn hóa 7 cột hiển thị ngày (dd/mm)
+    sorted_days_display = [d.split('-')[2] + '/' + d.split('-')[1] if d != "--/--" else "--/--" for d in sorted_days_sql]
+    while len(sorted_days_display) < 7:
+        sorted_days_display.insert(0, "--/--")
+        sorted_days_sql.insert(0, "1970-01-01")
+        
+    d_vals_matrix_opr = [days_dict_matrix_opr.get(d, 0) for d in sorted_days_sql]
 
     # 2. TRUY VẤN TỔNG SẢN LƯỢNG THÁNG
     m_current_matrix_opr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr}").fetchone()[0]
 
-    # 3. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (Đối tác -> Tỉnh/Chi nhánh -> Bưu cục)
-    all_tree_matrix_opr = con.execute(f"""
+    # 3. TRUY VẤN DRILL-DOWN THEO NGÀY (CHI NHÁNH -> BƯU CỤC)
+    tree_raw_data = con.execute(f"""
         SELECT 
-            COALESCE(ma_doitac, 'Khác') as dt,
             COALESCE(tinh_nhan, 'Khác') as tinh,
             COALESCE(ma_buucuc_goc, 'Khác') as bc,
+            CAST(DATE(time_nhap_may) AS VARCHAR) as ngay,
             COUNT(*) as sl
         FROM orders 
-        WHERE {where_sql_opr} 
-        GROUP BY ma_doitac, tinh_nhan, ma_buucuc_goc
-        ORDER BY dt, tinh, sl DESC
+        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        GROUP BY tinh_nhan, ma_buucuc_goc, DATE(time_nhap_may)
     """).fetchall()
 
-    tree_struct_matrix_opr = {}
-    for dt, tinh, bc, sl in all_tree_matrix_opr:
-        if dt not in tree_struct_matrix_opr: 
-            tree_struct_matrix_opr[dt] = {'sl': 0, 'tinhs': {}}
-        tree_struct_matrix_opr[dt]['sl'] += sl
-        if tinh not in tree_struct_matrix_opr[dt]['tinhs']: 
-            tree_struct_matrix_opr[dt]['tinhs'][tinh] = {'sl': 0, 'bcs': {}}
-        tree_struct_matrix_opr[dt]['tinhs'][tinh]['sl'] += sl
-        tree_struct_matrix_opr[dt]['tinhs'][tinh]['bcs'][bc] = sl
+    # Gom nhóm dữ liệu cho Cây 2 Cấp (Chi nhánh -> Bưu cục)
+    tree_struct_opr = {}
+    for tinh, bc, ngay, sl in tree_raw_data:
+        if tinh not in tree_struct_opr:
+            tree_struct_opr[tinh] = {'total': 0, 'days': {d: 0 for d in sorted_days_sql}, 'bcs': {}}
+        tree_struct_opr[tinh]['total'] += sl
+        if ngay in tree_struct_opr[tinh]['days']:
+            tree_struct_opr[tinh]['days'][ngay] += sl
+            
+        if bc not in tree_struct_opr[tinh]['bcs']:
+            tree_struct_opr[tinh]['bcs'][bc] = {'total': 0, 'days': {d: 0 for d in sorted_days_sql}}
+        tree_struct_opr[tinh]['bcs'][bc]['total'] += sl
+        if ngay in tree_struct_opr[tinh]['bcs'][bc]['days']:
+            tree_struct_opr[tinh]['bcs'][bc]['days'][ngay] += sl
 
-    # 4. RENDER CÁC HÀNG DRILL-DOWN DỮ LIỆU HTML
+    # 4. RENDER CÁC HÀNG DRILL-DOWN (BỎ CẤP ĐỐI TÁC, NHẢY CHÍNH XÁC SỐ THEO NGÀY)
     matrix_rows_opr_html = ""
-    for idx_dt, (dt_name, dt_data) in enumerate(tree_struct_matrix_opr.items()):
-        dt_sl = dt_data['sl']
-        dt_clean_id = f"opr_dt_{idx_dt}"
+    for idx_tinh, (tinh_name, tinh_data) in enumerate(tree_struct_opr.items()):
+        tinh_sl = tinh_data['total']
+        tinh_clean_id = f"opr_tinh_{idx_tinh}"
+        
+        # Lấy sản lượng thực tế từng ngày cho Chi nhánh
+        tinh_day_tds = "".join([f"<td>{tinh_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
 
-        # Cấp 1: Đối tác
+        # Cấp 1: Chi nhánh thu
         matrix_rows_opr_html += f"""
-        <tr class="sub-row-1 group_root_opr" style="display:none; background-color: #f4f6f8; font-weight:600;" onclick="toggleRow('{dt_clean_id}', event, 'btn_{dt_clean_id}')">
-            <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{dt_clean_id}">[+]</span> Đối tác: <b>{dt_name}</b></td>
+        <tr class="sub-row-1 group_root_opr" style="display:none; background-color: #ffffff; color: #1565c0; font-weight:600;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
+            <td style="padding-left: 20px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Chi nhánh thu: <b>{tinh_name}</b></td>
             <td>-</td><td>-</td>
-            <td>{dt_sl//7:,.0f}</td><td>{dt_sl//7:,.0f}</td><td>{dt_sl//7:,.0f}</td><td>{dt_sl//7:,.0f}</td><td>{dt_sl//7:,.0f}</td><td>{dt_sl//7:,.0f}</td><td>{dt_sl//7:,.0f}</td><td class="text-green">+5.22%</td>
-            <td>{dt_sl:,.0f}</td><td>{dt_sl:,.0f}</td><td>{dt_sl:,.0f}</td><td>{dt_sl:,.0f}</td><td>{dt_sl:,.0f}</td><td class="text-green">+5.22%</td>
-            <td>{dt_sl:,.0f}</td><td>{dt_sl:,.0f}</td><td class="text-green">+5.22%</td>
+            {tinh_day_tds}<td class="text-green">+5.22%</td>
+            <td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td class="text-green">+5.22%</td>
+            <td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td class="text-green">+5.22%</td>
         </tr>
         """
 
-        for idx_tinh, (tinh_name, tinh_data) in enumerate(dt_data['tinhs'].items()):
-            tinh_sl = tinh_data['sl']
-            tinh_clean_id = f"{dt_clean_id}_tinh_{idx_tinh}"
+        for bc_name, bc_data in tinh_data['bcs'].items():
+            bc_sl = bc_data['total']
+            # Lấy sản lượng thực tế từng ngày cho Bưu cục
+            bc_day_tds = "".join([f"<td>{bc_data['days'].get(d, 0):,.0f}</td>" for d in sorted_days_sql])
 
-            # Cấp 2: Chi nhánh thu
+            # Cấp 2: Bưu cục thu
             matrix_rows_opr_html += f"""
-            <tr class="sub-row-2 {dt_clean_id}" style="display:none; background-color: #ffffff; color: #1565c0;" onclick="toggleRow('{tinh_clean_id}', event, 'btn_{tinh_clean_id}')">
-                <td style="padding-left: 40px;"><span class="toggle-btn" id="btn_{tinh_clean_id}">[+]</span> Chi nhánh thu: <b>{tinh_name}</b></td>
+            <tr class="sub-row-2 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
+                <td style="padding-left: 40px;">• Bưu cục thu: <b>{bc_name}</b></td>
                 <td>-</td><td>-</td>
-                <td>{tinh_sl//7:,.0f}</td><td>{tinh_sl//7:,.0f}</td><td>{tinh_sl//7:,.0f}</td><td>{tinh_sl//7:,.0f}</td><td>{tinh_sl//7:,.0f}</td><td>{tinh_sl//7:,.0f}</td><td>{tinh_sl//7:,.0f}</td><td class="text-green">+5.22%</td>
-                <td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td class="text-green">+5.22%</td>
-                <td>{tinh_sl:,.0f}</td><td>{tinh_sl:,.0f}</td><td class="text-green">+5.22%</td>
+                {bc_day_tds}<td class="text-green">+5.22%</td>
+                <td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td class="text-green">+5.22%</td>
+                <td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td class="text-green">+5.22%</td>
             </tr>
             """
 
-            for bc_name, bc_sl in tinh_data['bcs'].items():
-                # Cấp 3: Bưu cục thu
-                matrix_rows_opr_html += f"""
-                <tr class="sub-row-3 {tinh_clean_id}" style="display:none; background-color: #fafafa; font-style: italic; color: #555;">
-                    <td style="padding-left: 60px;">• Bưu cục thu: <b>{bc_name}</b></td>
-                    <td>-</td><td>-</td>
-                    <td>{bc_sl//7:,.0f}</td><td>{bc_sl//7:,.0f}</td><td>{bc_sl//7:,.0f}</td><td>{bc_sl//7:,.0f}</td><td>{bc_sl//7:,.0f}</td><td>{bc_sl//7:,.0f}</td><td>{bc_sl//7:,.0f}</td><td class="text-green">+5.22%</td>
-                    <td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td class="text-green">+5.22%</td>
-                    <td>{bc_sl:,.0f}</td><td>{bc_sl:,.0f}</td><td class="text-green">+5.22%</td>
-                </tr>
-                """
-
-    # 5. CẤU TRÚC BẢNG MA TRẬN ODR KHÂU THU
+    # 5. KHỐI HTML BẢNG MA TRẬN CHUẨN ODR
     matrix_opr_html = f"""
     <!DOCTYPE html>
     <html>
@@ -714,7 +715,7 @@ def render(file_id: str):
                 <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
             </tr>
             <tr>
-                <th>{sorted_days_matrix_opr[0]}</th><th>{sorted_days_matrix_opr[1]}</th><th>{sorted_days_matrix_opr[2]}</th><th>{sorted_days_matrix_opr[3]}</th><th>{sorted_days_matrix_opr[4]}</th><th>{sorted_days_matrix_opr[5]}</th><th>{sorted_days_matrix_opr[6]}</th><th style="color: #ff5252;">DoD</th>
+                <th>{sorted_days_display[0]}</th><th>{sorted_days_display[1]}</th><th>{sorted_days_display[2]}</th><th>{sorted_days_display[3]}</th><th>{sorted_days_display[4]}</th><th>{sorted_days_display[5]}</th><th>{sorted_days_display[6]}</th><th style="color: #ff5252;">DoD</th>
                 <th>W28</th><th>W31</th><th>W32</th><th>W33</th><th>W34</th><th style="color: #ff5252;">WoW</th>
                 <th>M-1</th><th>M</th><th style="color: #ff5252;">MoM</th>
             </tr>
