@@ -91,7 +91,7 @@ def render(file_id: str):
     f_opr1, f_opr2, f_opr3, f_opr4, f_opr5, f_opr6, f_opr7 = st.columns(7)
 
     with f_opr1:
-        st.date_input("NGÀY NHẬP MÁY", key="opr_date")
+        st.date_input("NGÀY", key="opr_date")
     with f_opr2:
         st.multiselect("MÃ KHÁCH HÀNG", kh_opts, key="opr_kh", placeholder="Tất cả")
     with f_opr3:
