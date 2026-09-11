@@ -969,7 +969,7 @@ def render(file_id: str):
             from io import BytesIO
 
             # Lấy dữ liệu thô và xoay bảng (pivot) dạng ma trận
-            raw_export_df = con.execute(f\"\"\"
+            raw_export_df = con.execute(
                 SELECT 
                     COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as doi_tac,
                     COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
@@ -977,8 +977,7 @@ def render(file_id: str):
                     STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as ngay,
                     COUNT(DISTINCT ma_phieugui) as san_luong
                 FROM orders {base_where}
-                GROUP BY 1, 2, 3, 4
-            \"\"\").fetchdf()
+                GROUP BY 1, 2, 3,).fetchdf()
 
             if not raw_export_df.empty:
                 pivot_df = raw_export_df.pivot_table(
