@@ -154,7 +154,7 @@ def render(file_id: str):
 
     st.write("")
 
-    # 7. CSS & METRIC CARDS (DÀN NGANG 6 CỘT - ĐÃ BỎ ĐỌAN SUBTITLE XANH/ĐỎ)
+    # 7. CSS & METRIC CARDS (CHỮ & SỐ TO HƠN, GIỮ NGUYÊN KHOẢNG CÁCH)
     st.markdown("""
         <style>
         .metric-card {
@@ -165,8 +165,8 @@ def render(file_id: str):
             border: 1px solid #e0e0e0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
-        .metric-title { font-size: 11px; font-weight: bold; color: #555; text-transform: uppercase; white-space: nowrap; }
-        .metric-value { font-size: 20px; font-weight: bold; color: #111; margin-top: 6px; }
+        .metric-title { font-size: 12px; font-weight: bold; color: #555; text-transform: uppercase; white-space: nowrap; }
+        .metric-value { font-size: 24px; font-weight: bold; color: #111; margin-top: 6px; }
         </style>
     """, unsafe_allow_html=True)
 
