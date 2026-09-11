@@ -180,21 +180,17 @@ def render(file_id: str):
 
     with c_opr_left:
         # 1. TIÊU ĐỀ
-        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
     
-        # 2. KHỞI TẠO SESSION STATE CHỌN TIME VIEW NẾU CHƯA CÓ
-        if "opr_trend_view" not in st.session_state:
-            st.session_state.opr_trend_view = "Ngày"
+        # 2. BỘ CHỌN TIME VIEW (NẰM DƯỚI TIÊU ĐỀ, TRÊN BIỂU ĐỒ)
+        view_type = st.radio("", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="opr_trend_view", label_visibility="collapsed")
     
-        # Lấy giá trị view hiện tại
-        view_type = st.session_state.opr_trend_view
-    
-        # 3. XỬ LÝ GOM NHÓM THỜI GIAN THEO ĐÚNG YÊU CẦU
+        # 3. XỬ LÝ GOM NHÓM THỜI GIAN
         if view_type == "Ngày":
             time_group_sql = "STRFTIME('%d/%m', time_nhap_may)"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
         elif view_type == "Tuần":
-            # DuckDB/SQLite: Quy về Chủ Nhật đầu tuần (0: Chủ Nhật -> 6: Thứ 7)
+            # Quy về Chủ Nhật đầu tuần (0: Chủ Nhật -> 6: Thứ 7)
             time_group_sql = "STRFTIME('%d/%m', DATEADD('day', -CAST(STRFTIME('%w', time_nhap_may) AS INT), CAST(time_nhap_may AS DATE)))"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
         else: # Tháng
@@ -255,10 +251,10 @@ def render(file_id: str):
             )
     
             fig.update_layout(
-                margin=dict(l=10, r=10, t=10, b=0),
-                height=290,
+                margin=dict(l=10, r=10, t=10, b=10),
+                height=300,
                 hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
                 plot_bgcolor="white",
                 paper_bgcolor="white"
             )
@@ -268,11 +264,6 @@ def render(file_id: str):
             fig.update_yaxes(title_text="Tỷ lệ (%)", secondary_y=True, showgrid=False, range=[0, 110])
     
             st.plotly_chart(fig, use_container_width=True)
-    
-            # 5. NÚT CHỌN TIME VIEW ĐẶT Ở DƯỚI ĐỒ THỊ (CĂN GIỮA)
-            _, sub_c2, _ = st.columns([1, 2, 1])
-            with sub_c2:
-                st.radio("", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="opr_trend_view", label_visibility="collapsed")
         else:
             st.info("Không có dữ liệu xu hướng.")
 
