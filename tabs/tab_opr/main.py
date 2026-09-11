@@ -326,9 +326,9 @@ def render(file_id: str):
                 <tr style="background-color: #1e1e1e; color: #ffffff;">
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Mã KH</th>
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu Failed SLA</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu Đúng Giờ</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ Lệ Thành Công</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu failed</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu đúng giờ</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ lệ thu thành công</th>
                 </tr>
             </thead>
             <tbody>
@@ -345,10 +345,10 @@ def render(file_id: str):
             <thead>
                 <tr style="background-color: #1e1e1e; color: #ffffff;">
                     <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Mã KH</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">SL Thu</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Failed SLA</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Đúng Giờ</th>
-                    <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ Lệ Thành Công</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu failed</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold; border-right: 1px solid #444;">Sản lượng thu đúng giờ</th>
+                    <th style="padding: 9px 4px; text-align: center; font-weight: bold;">Tỷ lệ thu thành công</th>
                 </tr>
             </thead>
             <tbody>
@@ -362,3 +362,197 @@ def render(file_id: str):
             st.markdown(textwrap.dedent(no_data_html), unsafe_allow_html=True)
 
     st.divider()
+    
+    # 4. DANH SÁCH CHI NHÁNH & BƯU CỤC THỰC HIỆN
+    st.markdown('<p class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC THU (BẤM CHỌN DÒNG CHI NHÁNH BÊN TRÁI ĐỂ LỌC BƯU CỤC BÊN PHẢI)</p>', unsafe_allow_html=True)
+
+    cn_data_raw = con.execute(f"""
+        SELECT tinh_phat AS cn
+        FROM orders 
+        WHERE {where_sql_opr} AND tinh_phat IS NOT NULL
+        GROUP BY tinh_phat 
+        ORDER BY tinh_phat ASC
+    """).fetchall()
+
+    bc_data_raw = con.execute(f"""
+        SELECT 
+            ma_buucuc_phat AS bc, 
+            tinh_phat AS cn
+        FROM orders 
+        WHERE {where_sql_opr} AND tinh_phat IS NOT NULL AND ma_buucuc_phat IS NOT NULL
+        GROUP BY ma_buucuc_phat, tinh_phat 
+        ORDER BY ma_buucuc_phat ASC
+    """).fetchall()
+
+    rows_cn_html = ""
+    for item in cn_data_raw:
+        cn_code = item[0]
+        rows_cn_html += f"""
+        <tr class="cn-row" data-cn="{cn_code}" onclick="filterBC('{cn_code}', this)">
+            <td style="font-weight: bold; cursor: pointer;">{cn_code}</td>
+            <td>76.2%</td>
+            <td class="text-red">-4.8%</td>
+            <td style="background-color: #f9f9f9;">88.1%</td>
+            <td class="text-red" style="background-color: #f9f9f9;">-2.1%</td>
+        </tr>
+        """
+
+    rows_bc_html = ""
+    for item in bc_data_raw:
+        bc_code = item[0]
+        cn_code = item[1]
+        rows_bc_html += f"""
+        <tr class="bc-row" data-cn="{cn_code}">
+            <td style="font-weight: bold;">{bc_code}</td>
+            <td style="font-weight: bold;">{cn_code}</td>
+            <td>76.2%</td>
+            <td class="text-red">-4.8%</td>
+            <td style="background-color: #f9f9f9;">88.1%</td>
+            <td class="text-red" style="background-color: #f9f9f9;">-2.1%</td>
+        </tr>
+        """
+
+    interactive_tables_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        body {{ 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            margin: 0; padding: 0; background: transparent; 
+        }}
+        .grid-container {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }}
+        .table-title {{
+            font-size: 12px; font-weight: bold; color: #333; margin-bottom: 6px;
+        }}
+        .table-scroll {{
+            max-height: 360px;
+            overflow-y: auto;
+            border: 1px solid #d3d3d3;
+            border-radius: 4px;
+            background: #fff;
+        }}
+        table {{
+            width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11.5px;
+        }}
+        th {{
+            position: sticky; top: 0; z-index: 10;
+            background-color: #222222; color: #ffffff;
+            text-align: center; padding: 7px 4px;
+            border-bottom: 1px solid #444; border-right: 1px solid #444;
+            font-weight: bold;
+        }}
+        td {{
+            padding: 6px 4px; border-bottom: 1px solid #eee; border-right: 1px solid #eee;
+            text-align: center; color: #111;
+        }}
+        tr.cn-row:hover {{
+            background-color: #ffebee !important;
+            cursor: pointer;
+        }}
+        tr.selected-cn {{
+            background-color: #ffcdd2 !important;
+        }}
+        .text-red {{ color: #c62828; font-weight: bold; background-color: #fff5f5; }}
+        .btn-reset {{
+            display: inline-block; padding: 2px 8px; font-size: 11px;
+            background: #eee; border: 1px solid #ccc; border-radius: 3px;
+            cursor: pointer; margin-left: 8px; font-weight: normal;
+        }}
+    </style>
+    </head>
+    <body>
+
+    <div class="grid-container">
+        <div>
+            <div class="table-title">
+                Bảng Chi Nhánh Thu <span style="font-weight:normal; color:#666;">(Bấm chọn dòng để lọc Bưu cục)</span>
+                <span class="btn-reset" onclick="resetFilter()">Xóa lọc</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Chi nhánh</th>
+                            <th>Tỷ lệ thu thành công đúng giờ</th>
+                            <th>SS cùng kỳ</th>
+                            <th>Tỷ lệ xuất sạch</th>
+                            <th>SS cùng kỳ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_cn_html if rows_cn_html else "<tr><td colspan='5'>Không có dữ liệu</td></tr>"}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div>
+            <div class="table-title">
+                Bưu Cục Thu <span id="bc-title-status" style="color: #c62828; font-weight: bold;">(Toàn Quốc)</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Bưu cục</th>
+                            <th>Chi nhánh</th>
+                            <th>Tỷ lệ thu thành công đúng giờ</th>
+                            <th>SS cùng kỳ</th>
+                            <th>Tỷ lệ xuất sạch</th>
+                            <th>SS cùng kỳ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bc-tbody">
+                        {rows_bc_html if rows_bc_html else "<tr><td colspan='6'>Không có dữ liệu</td></tr>"}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function filterBC(cnCode, rowElem) {{
+            var cnRows = document.getElementsByClassName('cn-row');
+            for (var i = 0; i < cnRows.length; i++) {{
+                cnRows[i].classList.remove('selected-cn');
+            }}
+            if (rowElem) rowElem.classList.add('selected-cn');
+
+            var bcRows = document.getElementsByClassName('bc-row');
+            var count = 0;
+            for (var j = 0; j < bcRows.length; j++) {{
+                if (bcRows[j].getAttribute('data-cn') === cnCode) {{
+                    bcRows[j].style.display = 'table-row';
+                    count++;
+                }} else {{
+                    bcRows[j].style.display = 'none';
+                }}
+            }}
+            document.getElementById('bc-title-status').innerText = '(Chi nhánh: ' + cnCode + ')';
+        }}
+
+        function resetFilter() {{
+            var cnRows = document.getElementsByClassName('cn-row');
+            for (var i = 0; i < cnRows.length; i++) {{
+                cnRows[i].classList.remove('selected-cn');
+            }}
+            var bcRows = document.getElementsByClassName('bc-row');
+            for (var j = 0; j < bcRows.length; j++) {{
+                bcRows[j].style.display = 'table-row';
+            }}
+            document.getElementById('bc-title-status').innerText = '(Toàn Quốc)';
+        }}
+    </script>
+    </body>
+    </html>
+    """
+
+    components.html(interactive_tables_html, height=410, scrolling=False)
+
+    st.divider()
+
