@@ -218,7 +218,7 @@ def render(file_id: str):
             # Quy chuẩn thời gian DuckDB & Định dạng hiển thị
             if time_view == "Tuần":
                 # Quy chuẩn Chủ Nhật -> Thứ 7 cho TikTok Shop
-                date_expr = "CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE)"
+                date_expr = "CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE)"
                 date_format = "%d/%m/%Y"
             elif time_view == "Tháng":
                 date_expr = "DATE_TRUNC('month', CAST(tg_ptc AS DATE))"
