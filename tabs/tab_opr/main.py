@@ -174,3 +174,143 @@ def render(file_id: str):
         st.markdown(f'<div class="metric-card"><div class="metric-title">TỶ LỆ THU SAI SLA</div><div class="metric-value">{ty_le_failed:.1f}%</div></div>', unsafe_allow_html=True)
 
     st.write("")
+    
+    # 3. BIỂU ĐỒ XU HƯỚNG & TOP 10 DÀN NGANG
+    c_opr_left, c_opr_right = st.columns([1.2, 1])
+
+    with c_opr_left:
+        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-bottom:10px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
+    
+        # Truy vấn dữ liệu xu hướng theo ngày nhập máy
+        query_trend = f"""
+            SELECT 
+                CAST(time_nhap_may AS DATE) AS ngay,
+                COUNT(DISTINCT ma_phieugui) AS tong_sl,
+                COUNT(DISTINCT CASE 
+                    WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                    THEN ma_phieugui 
+                END) AS sl_dung
+            FROM orders 
+            WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+            GROUP BY 1
+            ORDER BY 1
+        """
+        df_trend = con.execute(query_trend).df()
+    
+        if not df_trend.empty:
+            df_trend['ngay_str'] = df_trend['ngay'].astype(str)
+            df_trend['ty_le_dung'] = (df_trend['sl_dung'] / df_trend['tong_sl'] * 100).round(1)
+    
+            # Tạo biểu đồ kết hợp 2 trục Y (Trục trái: Cột Sản lượng, Trục phải: Đường Tỷ lệ %)
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+    
+            # Cột: Sản lượng thu (Màu xám nhạt/xanh nhẹ)
+            fig.add_trace(
+                go.Bar(
+                    x=df_trend['ngay_str'],
+                    y=df_trend['tong_sl'],
+                    name="Sản lượng thu",
+                    marker_color="#b0bec5",
+                    opacity=0.65
+                ),
+                secondary_y=False,
+            )
+    
+            # Đường: Tỷ lệ thu đúng SLA (%) (Màu đỏ chủ đạo)
+            fig.add_trace(
+                go.Scatter(
+                    x=df_trend['ngay_str'],
+                    y=df_trend['ty_le_dung'],
+                    name="Tỷ lệ thu đúng SLA (%)",
+                    mode="lines+markers+text",
+                    line=dict(color="#c62828", width=3),
+                    marker=dict(size=6, color="#c62828"),
+                    text=[f"{v:.1f}%" for v in df_trend['ty_le_dung']],
+                    textposition="top center"
+                ),
+                secondary_y=True,
+            )
+    
+            # Cấu hình giao diện chuẩn phong cách ODR Dashboard
+            fig.update_layout(
+                margin=dict(l=10, r=10, t=20, b=20),
+                height=320,
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                plot_bgcolor="white",
+                paper_bgcolor="white"
+            )
+    
+            fig.update_xaxes(showgrid=False)
+            fig.update_yaxes(title_text="Sản lượng", secondary_y=False, showgrid=True, gridcolor="#eee")
+            fig.update_yaxes(title_text="Tỷ lệ (%)", secondary_y=True, showgrid=False, range=[0, 110])
+    
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Không có dữ liệu xu hướng.")
+
+    with c_opr_right:
+        st.markdown('<p class="section-red-title">TOP 10 ĐỐI TÁC TỒN THU CUỐI NGÀY CAO NHẤT</p>', unsafe_allow_html=True)
+        
+        top_dt_data = con.execute(f"""
+            SELECT COALESCE(ma_doitac, 'Khác') as dt, COUNT(ma_phieugui) as sl
+            FROM orders WHERE {where_sql_opr} AND ma_doitac IS NOT NULL
+            GROUP BY ma_doitac ORDER BY sl DESC LIMIT 10
+        """).fetchall()
+
+        top_kh_data = con.execute(f"""
+            SELECT COALESCE(ma_khgui, 'Khác') as kh, COUNT(ma_phieugui) as sl
+            FROM orders WHERE {where_sql_opr} AND ma_khgui IS NOT NULL
+            GROUP BY ma_khgui ORDER BY sl DESC LIMIT 10
+        """).fetchall()
+
+        rows_top_html = ""
+        for i in range(max(len(top_dt_data), len(top_kh_data))):
+            dt_name = top_dt_data[i][0] if i < len(top_dt_data) else "-"
+            dt_sl = f"{top_dt_data[i][1]:,.0f}" if i < len(top_dt_data) else "-"
+            kh_name = top_kh_data[i][0] if i < len(top_kh_data) else "-"
+            kh_sl = f"{top_kh_data[i][1]:,.0f}" if i < len(top_kh_data) else "-"
+
+            rows_top_html += f"""
+            <tr>
+                <td><b>{dt_name}</b></td><td class="val-red">{dt_sl}</td>
+                <td><b>{kh_name}</b></td><td class="val-red">{kh_sl}</td>
+            </tr>
+            """
+
+        html_top10_opr = f"""
+        <style>
+            .tbl-top10 {{ 
+                width: 100%; 
+                border-collapse: collapse; 
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                font-size: 11.5px; 
+                background: #fafafa; 
+                border: 1px solid #e0e0e0; 
+            }}
+            .tbl-top10 th {{ background: #f0f0f0; color: #333; padding: 6px; text-align: center; font-weight: bold; border-bottom: 1px solid #ccc; }}
+            .tbl-top10 td {{ padding: 5px 10px; border-bottom: 1px solid #eee; text-align: center; color: #111; }}
+            .val-red {{ color: #c62828; font-weight: bold; }}
+            .table-container-top {{ max-height: 250px; overflow-y: auto; }}
+        </style>
+        <div class="table-container-top">
+            <table class="tbl-top10">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">MÃ ĐỐI TÁC</th>
+                        <th style="width: 20%;">SẢN LƯỢNG</th>
+                        <th style="width: 30%;">MÃ KH</th>
+                        <th style="width: 20%;">SẢN LƯỢNG</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows_top_html if rows_top_html else "<tr><td colspan='4'>Không có dữ liệu</td></tr>"}
+                </tbody>
+            </table>
+        </div>
+        """
+        components.html(html_top10_opr, height=290, scrolling=False)
+
+    st.divider()
