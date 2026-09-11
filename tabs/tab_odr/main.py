@@ -1009,10 +1009,6 @@ def render(file_id: str):
         st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {{e}}")
 
     st.divider()
-    except Exception as e:
-        st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {e}")
-
-    st.divider()
 
     # # 8. BA BẢNG TỒN KHÂU (FM, MM, LM)
     # ton_tree_data = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bc, COUNT(DISTINCT ma_phieugui) as sl FROM orders WHERE {where_sql_odr} GROUP BY tinh_phat, ma_buucuc_phat ORDER BY 1, 3 DESC").fetchall()
