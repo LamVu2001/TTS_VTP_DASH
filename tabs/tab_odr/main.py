@@ -964,46 +964,6 @@ def render(file_id: str):
         """
         components.html(matrix_full_html, height=480, scrolling=True)
 
-        try:
-            import pandas as pd
-            from io import BytesIO
-
-            # Lấy dữ liệu thô và xoay bảng (pivot) dạng ma trận
-            raw_export_df = con.execute(
-                SELECT 
-                    COALESCE(CAST(ma_doitac AS VARCHAR), 'Khác') as doi_tac,
-                    COALESCE(CAST(tinh_phat AS VARCHAR), 'Khác') as tinh,
-                    COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Khác') as bưu_cục,
-                    STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as ngay,
-                    COUNT(DISTINCT ma_phieugui) as san_luong
-                FROM orders {base_where}
-                GROUP BY 1, 2, 3).fetchdf()
-
-            if not raw_export_df.empty:
-                pivot_df = raw_export_df.pivot_table(
-                    index=['doi_tac', 'tinh', 'bưu_cục'], 
-                    columns='ngay', 
-                    values='san_luong', 
-                    aggfunc='sum', 
-                    fill_value=0
-                ).reset_index()
-
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    pivot_df.to_excel(writer, index=False, sheet_name='Ma_Tran_Phat')
-                
-                excel_data = output.getvalue()
-
-                st.download_button(
-                    label="📥 Tải xuống bảng Ma trận dạng Excel",
-                    data=excel_data,
-                    file_name="ma_tran_chat_luong_phat.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="download_matrix_excel_btn"
-                )
-        except Exception as e:
-            st.error(f"Không thể tạo file tải: {{e}}")
-
     except Exception as e:
         st.error(f"Lỗi tính toán Ma trận chất lượng vận hành: {{e}}")
 
