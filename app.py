@@ -6,17 +6,26 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Cấu hình menu sidebar bên trái
-pg = st.navigation({
-    "Tiktoks": [
-        # Thêm dấu ngoặc kép "..." và đúng tên file của bạn
-        st.Page("TTS.py", title="Tiktoks Dashboard", icon="📊"),
-    ],
-    "Shopee": [
-        # Thêm dấu ngoặc kép "..." và đúng tên file của bạn
-        st.Page("SPE.py", title="Shopee Dashboard", icon="📁"),
-    ]
-})
+# Thêm CSS để phóng to chữ và làm gọn sidebar
+st.markdown("""
+<style>
+    /* Phóng to chữ của các nút chuyển trang trên sidebar */
+    [data-testid="stSidebarNav"] span {
+        font-size: 18px !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Khoảng cách giữa các mục cho thoáng */
+    [data-testid="stSidebarNav"] li {
+        margin-bottom: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Chạy trang được chọn
+# Khai báo các trang (đã bỏ icon và phân nhóm)
+pg = st.navigation([
+    st.Page("TTS.py", title="Tiktoks Dashboard"),
+    st.Page("SPE.py", title="Shopee Dashboard"),
+])
+
 pg.run()
