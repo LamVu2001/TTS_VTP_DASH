@@ -238,7 +238,7 @@ def render(file_id=None):
         except Exception as e:
             st.error(f"Lỗi truy vấn Top khách hàng: {e}")
     st.divider()
-    # ---------------------------------------------------------
+   # ---------------------------------------------------------
     # BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG (LÀM TRÒN DT & FIX BUNG CÂY)
     # ---------------------------------------------------------
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">BÁO CÁO MA TRẬN DOANH THU & SẢN LƯỢNG</div>', unsafe_allow_html=True)
@@ -262,10 +262,11 @@ def render(file_id=None):
             day_cols = days_df["dt"].dropna().tolist()[::-1]
             day_labels = days_df["dt_label"].dropna().tolist()[::-1]
 
+        # SỬA Ở ĐÂY: Dịch mốc tuần để bắt đầu từ Chủ Nhật (- INTERVAL 1 DAY rồi + INTERVAL 1 DAY)
         weeks_df = con.execute(f"""
             SELECT 
-                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as min_date,
-                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%W') as week_label
+                STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%Y-%m-%d') as min_date,
+                'W' || STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%W') as week_label
             FROM orders {base_where}
             GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 5
         """).fetchdf()
@@ -287,14 +288,14 @@ def render(file_id=None):
         while len(month_cols) < 2:
             month_cols.insert(0, f"M_empty_{len(month_cols)}")
 
-        # 2. AGGREGATE BẢNG TỔNG
+        # 2. AGGREGATE BẢNG TỔNG (Đồng bộ cách tính key tuần cho df_w)
         df_d = con.execute(f"""
             SELECT STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt
             FROM orders {base_where} GROUP BY 1
         """).fetchdf()
 
         df_w = con.execute(f"""
-            SELECT STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt
+            SELECT STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt
             FROM orders {base_where} GROUP BY 1
         """).fetchdf()
 
@@ -339,13 +340,13 @@ def render(file_id=None):
         wow_dt = ((v_w_dt[-1] - v_w_dt[-2])/v_w_dt[-2]*100) if len(v_w_dt)>1 and v_w_dt[-2]>0 else 0
         mom_dt = ((v_m_dt[1] - v_m_dt[0])/v_m_dt[0]*100) if len(v_m_dt)>1 and v_m_dt[0]>0 else 0
 
-        # 3. TRUY VẤN CHI TIẾT
+        # 3. TRUY VẤN CHI TIẾT (Đồng bộ w_key sang chuẩn Chủ Nhật)
         kh_day_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
-        kh_week_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
+        kh_week_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
         kh_month_df = con.execute(f"SELECT COALESCE(CAST(ma_khgui AS VARCHAR), 'Chua xác dinh') as kh, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2").fetchdf()
 
         tree_day_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as d_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
-        tree_week_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
+        tree_week_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST((DATE_TRUNC('week', CAST(tg_ptc AS DATE) + INTERVAL 1 DAY) - INTERVAL 1 DAY) AS DATE), '%Y-%m-%d') as w_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
         tree_month_df = con.execute(f"SELECT COALESCE(CAST(tinh_phat AS VARCHAR), 'Chua xác dinh') as tinh, COALESCE(CAST(ma_buucuc_phat AS VARCHAR), 'Chua xác dinh') as bc, STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m') as m_key, COUNT(DISTINCT ma_phieugui) as sl, COALESCE(SUM(tong_cuoc), 0) as dt FROM orders {base_where} GROUP BY 1, 2, 3").fetchdf()
 
         map_kh_d_sl, map_kh_w_sl, map_kh_m_sl = {}, {}, {}
@@ -477,7 +478,6 @@ def render(file_id=None):
                         bm0 = m_vals_bc[0] if len(m_vals_bc) > 0 else 0
                         bm1 = m_vals_bc[1] if len(m_vals_bc) > 1 else bm0
 
-                        # SỬA TẠI ĐÂY: Xóa tinh_header_id để Bưu cục không bị bung cùng lúc với Tỉnh
                         rows.append(f"""
                         <tr class="sub-row-3 {tinh_clean_id}" style="display:none; color: #555;">
                             <td style="padding-left: 55px;">- Bưu cục: {bc_name}</td>
@@ -553,7 +553,6 @@ def render(file_id=None):
         </table>
 
         <script>
-            // SỬA TẠI ĐÂY: JS ẩn dây chuyên sâu, khi đóng cấp trên sẽ ẩn toàn bộ cấp dưới
             function toggleRow(className, event, btnId) {{
                 if (event) event.stopPropagation();
                 var rows = document.getElementsByClassName(className);
