@@ -596,13 +596,15 @@ def render(file_id: str):
     components.html(textwrap.dedent(interactive_tables_html), height=410, scrolling=False)
     st.divider()
 
-       st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH")
-    
+    # MA TRẬN VẬN HÀNH
+    st.subheader("📊 BÁO CÁO MA TRẬN CHẤT LƯỢNG VẬN HÀNH (OPR)")
+
     try:
-        base_where = f"WHERE {where_sql_odr} AND tg_ptc IS NOT NULL" if where_sql_odr else "WHERE tg_ptc IS NOT NULL"
+        # Sửa lại thành where_sql_opr cho đúng ngữ cảnh file OPR
+        base_where = f"WHERE {where_sql_opr} AND tg_ptc IS NOT NULL" if 'where_sql_opr' in locals() and where_sql_opr else "WHERE tg_ptc IS NOT NULL"
     
         # ==========================================
-        # 1. XÁC ĐỊNH NGÀY KẾT THÚC DỰA TRÊN FILTER (MAX DATE)
+        # 1. XÁC ĐỊNH MỐC THỜI GIAN THEO FILTER (MAX DATE)
         # ==========================================
         max_date_df = con.execute(f"SELECT MAX(CAST(tg_ptc AS DATE)) as max_dt FROM orders {base_where}").fetchdf()
         
@@ -611,43 +613,41 @@ def render(file_id: str):
         else:
             max_dt = con.execute("SELECT MAX(CAST(tg_ptc AS DATE)) FROM orders WHERE tg_ptc IS NOT NULL").fetchone()[0]
     
-        # ==========================================
-        # 2. SINH CHUẨN DANH SÁCH MỐC THỜI GIAN LÙI TỪ MAX_DT
-        # ==========================================
-        
-        # A. 7 Ngày gần nhất lùi từ max_dt
-        day_cols_df = con.execute(f"""
+        # A. 7 ngày gần nhất (tính lùi từ max_dt)
+        days_df = con.execute(f"""
             SELECT 
-                STRFTIME(CAST('{max_dt}' AS DATE) - INTERVAL (i) DAY, '%Y-%m-%d') as d_key,
-                STRFTIME(CAST('{max_dt}' AS DATE) - INTERVAL (i) DAY, '%d/%m') as d_label
-            FROM range(0, 7) t(i)
-            ORDER BY d_key ASC
-        """).fetchdf()
-        
-        day_cols = day_cols_df["d_key"].tolist()
-        day_labels = day_cols_df["d_label"].tolist()
-    
-        # B. 5 Tuần gần nhất lùi từ tuần của max_dt
-        week_cols_df = con.execute(f"""
-            SELECT 
-                STRFTIME(CAST(DATE_TRUNC('week', CAST('{max_dt}' AS DATE) - INTERVAL (i*7) DAY) AS DATE), '%Y-%m-%d') as w_key,
-                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST('{max_dt}' AS DATE) - INTERVAL (i*7) DAY) AS DATE), '%W') as w_label
-            FROM range(0, 5) t(i)
-            ORDER BY w_key ASC
+                STRFTIME(CAST(tg_ptc AS DATE), '%Y-%m-%d') as dt, 
+                STRFTIME(CAST(tg_ptc AS DATE), '%d/%m') as dt_label
+            FROM orders 
+            {base_where} AND CAST(tg_ptc AS DATE) <= '{max_dt}'
+            GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 7
         """).fetchdf()
     
-        week_cols = week_cols_df["w_key"].tolist()
-        week_labels = week_cols_df["w_label"].tolist()
+        day_cols = days_df["dt"].tolist()[::-1] if days_df is not None and not days_df.empty else []
+        day_labels = days_df["dt_label"].tolist()[::-1] if days_df is not None and not days_df.empty else []
     
-        # C. 2 Tháng gần nhất (M-1 và M) dựa trên max_dt
-        m1_key = con.execute(f"SELECT STRFTIME(CAST('{max_dt}' AS DATE), '%Y-%m')").fetchone()[0] # Tháng M
-        m0_key = con.execute(f"SELECT STRFTIME(CAST('{max_dt}' AS DATE) - INTERVAL 1 MONTH, '%Y-%m')").fetchone()[0] # Tháng M-1
+        # B. 5 tuần gần nhất (tính lùi từ max_dt)
+        weeks_df = con.execute(f"""
+            SELECT 
+                STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%Y-%m-%d') as min_date,
+                'W' || STRFTIME(CAST(DATE_TRUNC('week', CAST(tg_ptc AS DATE)) AS DATE), '%W') as week_label
+            FROM orders 
+            {base_where} AND CAST(tg_ptc AS DATE) <= '{max_dt}'
+            GROUP BY 1, 2 ORDER BY 1 DESC LIMIT 5
+        """).fetchdf()
+    
+        week_cols = weeks_df["min_date"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
+        week_labels = weeks_df["week_label"].tolist()[::-1] if weeks_df is not None and not weeks_df.empty else []
+    
+        # C. Tháng M (Tháng của Max Date) và Tháng M-1 (Tháng liền trước)
+        m1_key = con.execute(f"SELECT STRFTIME(CAST('{max_dt}' AS DATE), '%Y-%m')").fetchone()[0] 
+        m0_key = con.execute(f"SELECT STRFTIME(CAST('{max_dt}' AS DATE) - INTERVAL 1 MONTH, '%Y-%m')").fetchone()[0] 
     
         month_cols = [m0_key, m1_key]
         month_labels = [f"M-{m0_key.split('-')[1]}", f"M-{m1_key.split('-')[1]}"]
     
         # ==========================================
-        # 3. ĐIỀU KIỆN TÍNH ODR VÀ PTC_1
+        # 2. ĐIỀU KIỆN TÍNH ODR VÀ PTC_1
         # ==========================================
         sql_ptc1_expr = "CAST(PTC_1 AS VARCHAR) IN ('1', '1.0', 'true', 'TRUE')"
         sql_lydo_l1_expr = """
@@ -662,7 +662,7 @@ def render(file_id: str):
         sql_odr_expr = f"({sql_ptc1_expr} OR {sql_lydo_l1_expr})"
     
         # ==========================================
-        # 4. AGGREGATE BẢNG TỔNG
+        # 3. AGGREGATE BẢNG TỔNG
         # ==========================================
         df_d = con.execute(f"""
             SELECT 
@@ -756,7 +756,7 @@ def render(file_id: str):
         mom_next = (v_m_next[1] - v_m_next[0]) if len(v_m_next)>1 else 0
     
         # ==========================================
-        # 5. AGGREGATE DỮ LIỆU CÂY DRILL-DOWN
+        # 4. TRUY VẤN CÂY DỮ LIỆU ĐỐI TÁC / TỈNH / BƯU CỤC
         # ==========================================
         tree_day_df = con.execute(f"""
             SELECT 
@@ -922,7 +922,7 @@ def render(file_id: str):
         m1_next = v_m_next[1] if len(v_m_next) > 1 else 0
     
         # ==========================================
-        # 6. RENDER GIAO DIỆN HTML
+        # 5. RENDER HTML BẢNG MA TRẬN
         # ==========================================
         matrix_full_html = f"""
         <!DOCTYPE html><html><head><style>
@@ -939,7 +939,7 @@ def render(file_id: str):
         <table class="matrix-table">
             <thead>
                 <tr>
-                    <th rowspan="2" style="width: 32%;">Chỉ tiêu khâu Thu</th>
+                    <th rowspan="2" style="width: 32%;">Chỉ tiêu</th>
                     <th colspan="{n_day_cols + 1}" style="background-color: #2a2a2a;">{n_day_cols} ngày gần nhất</th>
                     <th colspan="{n_week_cols + 1}" style="background-color: #333333;">{n_week_cols} tuần gần nhất</th>
                     <th colspan="3" style="background-color: #2a2a2a;">Tháng</th>
@@ -953,7 +953,7 @@ def render(file_id: str):
             <tbody>
                 <!-- 1. SẢN LƯỢNG PHÁT -->
                 <tr class="row-group" onclick="toggleRow('group_root', event, 'btn_root')">
-                    <td><span class="toggle-btn" id="btn_root">[+]</span> <b>Sản lượng phải thu</b></td>
+                    <td><span class="toggle-btn" id="btn_root">[+]</span> <b>Sản lượng phát</b></td>
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_d_phat])}
                     {fmt_diff(dod_p)}
                     {"".join([f"<td>{v:,.0f}</td>" for v in v_w_phat])}
