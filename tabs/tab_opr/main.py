@@ -179,27 +179,29 @@ def render(file_id: str):
     c_opr_left, c_opr_right = st.columns([1.2, 1])
 
     with c_opr_left:
-        # 1. TIÊU ĐỀ & RADIO BUTTON CHỌN TIME VIEW (DÀN NGANG)
-        t_col1, t_col2 = st.columns([2, 1])
-        with t_col1:
-            st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
-        with t_col2:
-            view_type = st.radio("", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="opr_trend_view", label_visibility="collapsed")
+        # 1. TIÊU ĐỀ
+        st.markdown('<div style="font-size:14px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:10px;">XU HƯỚNG SẢN LƯỢNG VÀ TỶ LỆ THU ĐÚNG SLA</div>', unsafe_allow_html=True)
     
-        # 2. XỬ LÝ GOM NHÓM THỜI GIAN THEO ĐÚNG YÊU CẦU
-        # - Tuần: Chủ Nhật (Sunday = 0) đến Thứ 7 (Saturday = 6)
+        # 2. KHỞI TẠO SESSION STATE CHỌN TIME VIEW NẾU CHƯA CÓ
+        if "opr_trend_view" not in st.session_state:
+            st.session_state.opr_trend_view = "Ngày"
+    
+        # Lấy giá trị view hiện tại
+        view_type = st.session_state.opr_trend_view
+    
+        # 3. XỬ LÝ GOM NHÓM THỜI GIAN THEO ĐÚNG YÊU CẦU
         if view_type == "Ngày":
             time_group_sql = "STRFTIME('%d/%m', time_nhap_may)"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
         elif view_type == "Tuần":
-            # DuckDB/SQLite: strftime('%w') trả về 0 cho CN, 1 cho T2... 6 cho T7 -> Trừ đi số ngày đó để quy về CN đầu tuần
+            # DuckDB/SQLite: Quy về Chủ Nhật đầu tuần (0: Chủ Nhật -> 6: Thứ 7)
             time_group_sql = "STRFTIME('%d/%m', DATEADD('day', -CAST(STRFTIME('%w', time_nhap_may) AS INT), CAST(time_nhap_may AS DATE)))"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
         else: # Tháng
             time_group_sql = "STRFTIME('%m/%Y', time_nhap_may)"
             order_sql = "MIN(CAST(time_nhap_may AS DATE))"
     
-        # 3. TRUY VẤN DỮ LIỆU DUCKDB
+        # 4. TRUY VẤN DỮ LIỆU DUCKDB
         query_trend = f"""
             SELECT 
                 {time_group_sql} AS time_label,
@@ -236,7 +238,6 @@ def render(file_id: str):
             )
     
             # Đường: Tỷ lệ thu đúng SLA (%)
-            # Chỉ hiện text trên điểm khi chế độ xem là Tuần hoặc Tháng (hoặc Ngày ít dữ liệu) để tránh đè chữ
             show_text_mode = "lines+markers+text" if (view_type != "Ngày" or len(df_trend) <= 10) else "lines+markers"
             
             fig.add_trace(
@@ -254,10 +255,10 @@ def render(file_id: str):
             )
     
             fig.update_layout(
-                margin=dict(l=10, r=10, t=10, b=10),
-                height=320,
+                margin=dict(l=10, r=10, t=10, b=0),
+                height=290,
                 hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5),
                 plot_bgcolor="white",
                 paper_bgcolor="white"
             )
@@ -267,6 +268,11 @@ def render(file_id: str):
             fig.update_yaxes(title_text="Tỷ lệ (%)", secondary_y=True, showgrid=False, range=[0, 110])
     
             st.plotly_chart(fig, use_container_width=True)
+    
+            # 5. NÚT CHỌN TIME VIEW ĐẶT Ở DƯỚI ĐỒ THỊ (CĂN GIỮA)
+            _, sub_c2, _ = st.columns([1, 2, 1])
+            with sub_c2:
+                st.radio("", ["Ngày", "Tuần", "Tháng"], horizontal=True, key="opr_trend_view", label_visibility="collapsed")
         else:
             st.info("Không có dữ liệu xu hướng.")
 
