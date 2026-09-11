@@ -97,19 +97,27 @@ def render(file_id: str):
     where_sql_opr = build_where()
     
     try:
+        # Chuẩn hóa dữ liệu cột danh_gia về dạng chữ không dấu để so sánh chuẩn tuyệt đối
         query_kpi = f"""
             SELECT 
                 COUNT(DISTINCT ma_phieugui) AS tong_sl,
                 COUNT(DISTINCT CASE 
-                    WHEN danh_gia LIKE '%Đúng%' OR danh_gia LIKE '%đúng%' THEN ma_phieugui 
+                    WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%'
+                    THEN ma_phieugui 
                 END) AS sl_dung,
                 COUNT(DISTINCT CASE 
-                    WHEN danh_gia LIKE '%Sai%' OR danh_gia LIKE '%sai%' THEN ma_phieugui 
+                    WHEN LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('sai', '0', 'false', 'fail', 'not ok') 
+                      OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%sai%'
+                    THEN ma_phieugui 
                 END) AS sl_sai,
                 COUNT(DISTINCT CASE 
-                    WHEN (danh_gia LIKE '%Đúng%' OR danh_gia LIKE '%đúng%') 
-                         AND time_thulan2 IS NULL 
-                         AND time_thulan3 IS NULL 
+                    WHEN (LOWER(TRIM(CAST(danh_gia AS VARCHAR))) IN ('dung', 'đúng', '1', 'true', 'ok', 'pass') 
+                          OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%dung%'
+                          OR LOWER(CAST(danh_gia AS VARCHAR)) LIKE '%đúng%') 
+                         AND (time_thulan2 IS NULL OR CAST(time_thulan2 AS VARCHAR) = '')
+                         AND (time_thulan3 IS NULL OR CAST(time_thulan3 AS VARCHAR) = '')
                     THEN ma_phieugui 
                 END) AS sl_dung_lan1
             FROM orders 
@@ -122,18 +130,16 @@ def render(file_id: str):
         sl_sai = res[2] or 0
         sl_dung_lan1 = res[3] or 0
 
-        # Fallback tự động trong trường hợp chuỗi UTF-8 tiếng Việt bị lệch Encoding
+        # Nếu vẫn bằng 0 do DB lưu kiểu khác, fallback lấy Tổng trừ Sai
         if sl_dung == 0 and sl_sai > 0 and tong_sl > sl_sai:
             sl_dung = tong_sl - sl_sai
 
         ty_le_dung_gio = (sl_dung / tong_sl * 100) if tong_sl > 0 else 0.0
         ty_le_dung_lan1 = (sl_dung_lan1 / tong_sl * 100) if tong_sl > 0 else 0.0
 
-    except Exception:
+    except Exception as e:
         tong_sl = sl_dung = sl_sai = 0
         ty_le_dung_gio = ty_le_dung_lan1 = 0.0
-
-    st.write("")
 
     # 7. CSS & METRIC CARDS (DÀN NGANG 5 CỘT)
     st.markdown("""
