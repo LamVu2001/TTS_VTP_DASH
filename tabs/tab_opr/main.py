@@ -364,10 +364,8 @@ def render(file_id: str):
     st.divider()
     
     # 4. DANH SÁCH CHI NHÁNH & BƯU CỤC THỰC HIỆN
-    st.markdown(
-        '<p style="font-size:20px;class="section-red-title">DANH SÁCH CHI NHÁNH & BƯU CỤC THU</p>',
-        unsafe_allow_html=True
-    )
+    st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">DANH SÁCH CHI NHÁNH & BƯU CỤC THU</div>', unsafe_allow_html=True)
+
     
     # 1. TRUY VẤN DỮ LIỆU CHI NHÁNH (tinh_nhan)
     cn_data_raw = con.execute(f"""
