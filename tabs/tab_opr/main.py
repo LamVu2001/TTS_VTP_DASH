@@ -87,7 +87,7 @@ def render(file_id: str):
     with f_opr3:
         st.multiselect("TỈNH NHẬN", tn_opts, key="opr_tn", placeholder="Tất cả")
     with f_opr4:
-        st.multiselect("BƯU CỤC PHÁT", bc_opts, key="opr_bc", placeholder="Tất cả")
+        st.multiselect("BƯU CỤC NHẬN", bc_opts, key="opr_bc", placeholder="Tất cả")
     with f_opr5:
         st.multiselect("MÃ DỊCH VỤ", dv_opts, key="opr_dv", placeholder="Tất cả")
     with f_opr6:
