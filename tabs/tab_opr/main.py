@@ -618,7 +618,6 @@ def render(file_id: str):
         sorted_days_sql.insert(0, "1970-01-01")
     d_vals_matrix_opr = [days_dict_matrix_opr.get(d, 0) for d in sorted_days_sql]
 
-    # Tính DoD tổng sản lượng
     day_prev_tot = d_vals_matrix_opr[-2]
     day_cur_tot = d_vals_matrix_opr[-1]
     dod_tot = ((day_cur_tot - day_prev_tot) / day_prev_tot * 100) if day_prev_tot > 0 else 0.0
@@ -647,8 +646,33 @@ def render(file_id: str):
         sorted_months = sorted(raw_months)
         while len(sorted_months) < 2: sorted_months.insert(0, "00")
 
-    # 3. TRUY VẤN TỔNG SẢN LƯỢNG CHO 2 THÁNG
-    m_current_matrix_opr = con.execute(f"SELECT COUNT(*) FROM orders WHERE {where_sql_opr}").fetchone()[0]
+    # 3. TRUY VẤN TỔNG SẢN LƯỢNG CHO 2 THÁNG & TỪNG TUẦN TỔNG
+    m_prev_matrix_opr = con.execute(f"""
+        SELECT COUNT(*) FROM orders 
+        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
+        AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[0]}'
+    """).fetchone()[0]
+
+    m_current_matrix_opr = con.execute(f"""
+        SELECT COUNT(*) FROM orders 
+        WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL 
+        AND STRFTIME(DATE(time_nhap_may), '%m') = '{sorted_months[1]}'
+    """).fetchone()[0]
+
+    mom_tot = ((m_current_matrix_opr - m_prev_matrix_opr) / m_prev_matrix_opr * 100) if m_prev_matrix_opr > 0 else 0.0
+
+    # Truy vấn dữ liệu tuần tổng gốc
+    weeks_data_sql = con.execute(f"""
+        SELECT STRFTIME(DATE(time_nhap_may), '%W') as wk, COUNT(*) as sl
+        FROM orders WHERE {where_sql_opr} AND time_nhap_may IS NOT NULL
+        GROUP BY wk
+    """).fetchall()
+    weeks_dict_tot = {row[0]: row[1] for row in weeks_data_sql}
+    w_vals_matrix_opr = [weeks_dict_tot.get(w, 0) for w in sorted_weeks]
+
+    wk_prev_tot = w_vals_matrix_opr[-2]
+    wk_cur_tot = w_vals_matrix_opr[-1]
+    wow_tot = ((wk_cur_tot - wk_prev_tot) / wk_prev_tot * 100) if wk_prev_tot > 0 else 0.0
 
     # 4. TRUY VẤN DRILL-DOWN CÂY DỮ LIỆU (CHI NHÁNH -> BƯU CỤC)
     tree_raw_data = con.execute(f"""
@@ -741,7 +765,7 @@ def render(file_id: str):
             </tr>
             """
 
-    # 6. KHỐI HTML BẢNG MA TRẬN (ĐÃ XÓA MỤC TIÊU & KẾT QUẢ THỰC HIỆN, ĐƯA TỶ LỆ VỀ DẠNG ĐỘNG HOẶC `-` NẾU CHƯA CÓ CÔNG THỨC THẬT)
+    # 6. KHỐI HTML BẢNG MA TRẬN
     matrix_opr_html = f"""
     <!DOCTYPE html>
     <html>
@@ -778,23 +802,23 @@ def render(file_id: str):
             <tr class="row-group" onclick="toggleRow('group_root_opr', event, 'btn_root_opr')">
                 <td><span class="toggle-btn" id="btn_root_opr">[+]</span> <b>Sản lượng phải thu</b></td>
                 <td>{d_vals_matrix_opr[0]:,.0f}</td><td>{d_vals_matrix_opr[1]:,.0f}</td><td>{d_vals_matrix_opr[2]:,.0f}</td><td>{d_vals_matrix_opr[3]:,.0f}</td><td>{d_vals_matrix_opr[4]:,.0f}</td><td>{d_vals_matrix_opr[5]:,.0f}</td><td><b>{d_vals_matrix_opr[6]:,.0f}</b></td><td class="{ 'text-green' if dod_tot>=0 else 'text-red' }">{dod_tot:+.2f}%</td>
-                <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-                <td>{0:,.0f}</td><td><b>{m_current_matrix_opr:,.0f}</b></td><td>-</td>
+                <td>{w_vals_matrix_opr[0]:,.0f}</td><td>{w_vals_matrix_opr[1]:,.0f}</td><td>{w_vals_matrix_opr[2]:,.0f}</td><td>{w_vals_matrix_opr[3]:,.0f}</td><td><b>{w_vals_matrix_opr[4]:,.0f}</b></td><td class="{ 'text-green' if wow_tot>=0 else 'text-red' }">{wow_tot:+.2f}%</td>
+                <td>{m_prev_matrix_opr:,.0f}</td><td><b>{m_current_matrix_opr:,.0f}</b></td><td class="{ 'text-green' if mom_tot>=0 else 'text-red' }">{mom_tot:+.2f}%</td>
             </tr>
 
             {matrix_rows_opr_html}
 
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ</td>
-                <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-                <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-                <td>-</td><td>-</td><td>-</td>
+                <td colspan="8" style="text-align: center; color: #777; font-style: italic;">Đang cập nhật dữ liệu tỷ lệ thực tế</td>
+                <td colspan="6" style="text-align: center; color: #777; font-style: italic;">Đang cập nhật dữ liệu tỷ lệ thực tế</td>
+                <td colspan="3" style="text-align: center; color: #777; font-style: italic;">-</td>
             </tr>
             <tr>
                 <td style="font-weight: bold;">% Thu thành công đúng giờ lần 1</td>
-                <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-                <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-                <td>-</td><td>-</td><td>-</td>
+                <td colspan="8" style="text-align: center; color: #777; font-style: italic;">Đang cập nhật dữ liệu tỷ lệ thực tế</td>
+                <td colspan="6" style="text-align: center; color: #777; font-style: italic;">Đang cập nhật dữ liệu tỷ lệ thực tế</td>
+                <td colspan="3" style="text-align: center; color: #777; font-style: italic;">-</td>
             </tr>
         </tbody>
     </table>
