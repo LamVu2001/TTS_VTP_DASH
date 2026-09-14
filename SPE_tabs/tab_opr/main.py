@@ -9,7 +9,7 @@ from datetime import date
 import textwrap
 
 # Import trực tiếp file data_loader.py từ thư mục gốc
-from data_loader import get_opr_connection
+from data_loader import get_spe_opr_connection
 
 def render(file_id: str):
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
