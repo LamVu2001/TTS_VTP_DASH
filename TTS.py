@@ -9,7 +9,7 @@ st.set_page_config(page_title="Tiktoks Dashboard", layout="wide")
 # Tiêu đề với màu đỏ đồng bộ chuẩn với thanh line phân cách
 st.markdown("""
     <h2 style="color: #c62828; display: flex; align-items: center; gap: 10px; font-weight: bold;">
-        <span>🏥</span> TIKTOKS DASHBOARD
+        <span>🏥</span> TIKTOK SHOP DASHBOARD
     </h2>
 """, unsafe_allow_html=True)
 
