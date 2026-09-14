@@ -15,7 +15,7 @@ def render(file_id: str):
     st.markdown('<div style="height: 3px; background-color: #c62828; margin-bottom: 20px;"></div>', unsafe_allow_html=True)
 
     # 1. KẾT NỐI DATA THEO FILE_ID
-    con = get_opr_connection(file_id)
+    con = get_spe_opr_connection(file_id)
 
    # 1. KHỞI TẠO SESSION STATE BỘ LỌC
     if "opr_date" not in st.session_state or not st.session_state.opr_date:
