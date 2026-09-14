@@ -35,7 +35,7 @@ st.markdown("""
 # ID File Data
 TTS_PHAT_FILE_ID = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"
 DOANHTHU_FILE_ID = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"  # Điền File ID của dữ liệu doanh thu nếu dùng riêng
-TTS_THU_FILE_ID = "1OUeMwfOHuI1sOMU2ilQySYK2IOl8Xx4n" 
+TTS_THU_FILE_ID = "1xEEvCjDTBp-GihkUiBTEygM_7Bwm71ZC" 
 
 # Khai báo 2 tab
 tab_doanhthu, tab_odr, tab_opr = st.tabs(["💰 TAB DOANH THU","🚚 TAB ODR","⚡ TAB OPR"])
