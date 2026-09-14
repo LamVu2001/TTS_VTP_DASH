@@ -24,7 +24,7 @@ st.markdown("""
 
 # Khai báo các trang (đã bỏ icon và phân nhóm)
 pg = st.navigation([
-    st.Page("TTS.py", title="Tiktoks Dashboard"),
+    st.Page("TTS.py", title="Tiktok Shop Dashboard"),
     st.Page("SPE.py", title="Shopee Dashboard"),
     st.Page("Others.py", title="Others KA Dashboard")
 ])
