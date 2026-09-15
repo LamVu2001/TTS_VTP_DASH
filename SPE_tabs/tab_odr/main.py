@@ -153,8 +153,8 @@ def render(file_id: str):
     # Tính toán tỷ lệ %
     pct_failed_sla = (sl_failed_sla / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
-    pct_ptc_dung_gio = (tu_so_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
-    pct_ptc1_dung_gio = (sl_lan1_dung_chi_tieu / mau_so_501 * 100) if mau_so_501 > 0 else 0
+    pct_ptc_dung_gio = (tu_so_dung_gio / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
+    pct_ptc1_dung_gio = (sl_lan1_dung_chi_tieu / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
 
     # HIỂN THỊ 5 THẺ KPI (ĐÃ BỎ CHỮ XANH, TĂNG KÍCH THƯỚC CHỮ)
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
