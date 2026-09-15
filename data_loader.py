@@ -94,11 +94,11 @@ def get_spe_opr_connection(file_id: str = "1xEEvCjDTBp-GihkUiBTEygM_7Bwm71ZC"):
 
 @st.cache_resource
 def get_spe_odr_connection(file_id: str = "19WK4CnUH70ftLi1bwbAB-LwMTGUDs19P"):
-    """
+     """
     Hàm kết nối DuckDB dùng chung cho tất cả các Tab (ODR, Doanh Thu,...).
     Tự động tải dữ liệu Parquet từ Google Drive nếu chưa có dưới local.
     """
-    local_file = Path("SPE_thu_data.parquet")
+    local_file = Path("TTS_phat_data.parquet")
 
     # Tải file parquet nếu chưa tồn tại
     if not local_file.exists():
@@ -112,7 +112,17 @@ def get_spe_odr_connection(file_id: str = "19WK4CnUH70ftLi1bwbAB-LwMTGUDs19P"):
     # Tạo VIEW orders chứa đầy đủ các trường dữ liệu và clean_date
     con.execute(f"""
         CREATE VIEW IF NOT EXISTS orders AS 
-        SELECT *
+        SELECT *, 
+               COALESCE(
+                   TRY_CAST(ngay_bat_dau_phai_phat AS DATE),
+                   TRY_CAST(STRPTIME(CAST(ngay_bat_dau_phai_phat AS VARCHAR), '%d/%m/%Y') AS DATE),
+                   TRY_CAST(STRPTIME(CAST(ngay_bat_dau_phai_phat AS VARCHAR), '%Y-%m-%d') AS DATE)
+               ) as clean_date,
+               COALESCE(
+                   TRY_CAST(ngay_phat_cuoi_cung AS DATE),
+                   TRY_CAST(STRPTIME(CAST(ngay_phat_cuoi_cung AS VARCHAR), '%d/%m/%Y') AS DATE),
+                   TRY_CAST(STRPTIME(CAST(ngay_phat_cuoi_cung AS VARCHAR), '%Y-%m-%d') AS DATE)
+               ) as clean_date_ptc
         FROM read_parquet('{local_file}')
     """)
     
