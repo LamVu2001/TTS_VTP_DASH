@@ -98,7 +98,7 @@ def get_spe_odr_connection(file_id: str = "19WK4CnUH70ftLi1bwbAB-LwMTGUDs19P"):
     Hàm kết nối DuckDB dùng chung cho tất cả các Tab (ODR, Doanh Thu,...).
     Tự động tải dữ liệu Parquet từ Google Drive nếu chưa có dưới local.
     """
-    local_file = Path("TTS_phat_data.parquet")
+    local_file = Path("SPE_phat_data.parquet")
 
     # Tải file parquet nếu chưa tồn tại
     if not local_file.exists():
