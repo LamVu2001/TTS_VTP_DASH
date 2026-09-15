@@ -7,14 +7,11 @@ from SPE_tabs.tab_opr.main import render as render_opr
 st.set_page_config(page_title="Shopee", layout="wide")
 
 # Tiêu đề với màu đỏ đồng bộ chuẩn với thanh line phân cách
+# Tiêu đề với màu đỏ đồng bộ chuẩn với thanh line phân cách
 st.markdown("""
-    <div style="display: flex; align-items: center; gap: 12px; font-weight: bold; font-family: sans-serif;">
-        <!-- Dùng thẻ <img> trỏ tới link ảnh logo Shopee chuẩn -->
-        <img src="https://upload.wikimedia.org/wikipedia/commons/f/fe/Shopee.svg" alt="Shopee Logo" style="height: 40px;">
-        <span style="color: #EE4D2D; font-size: 24px;">SHOPEE DASHBOARD</span>
-    </div>
+    <h2 style="color: #c62828; display: flex; align-items: center; gap: 10px; font-weight: bold;"> SHOPEE DASHBOARD
+    </h2>
 """, unsafe_allow_html=True)
-
 
 # CSS Định dạng Metric Card
 st.markdown("""
