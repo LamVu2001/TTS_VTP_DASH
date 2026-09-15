@@ -130,6 +130,12 @@ def render(file_id: str):
                 THEN ma_phieugui 
             END) AS sl_lan1_in_sla,
 
+            -- Tử số mới: Đơn có danhgia_time_gach_bp1 = 'Đúng chỉ tiêu'
+            COUNT(DISTINCT CASE 
+                WHEN danhgia_time_gach_bp1 = 'Đúng chỉ tiêu' 
+                THEN ma_phieugui 
+            END) AS sl_lan1_dung_chi_tieu,
+
             -- Đơn PTC Lần 1 chung trong kỳ
             COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1
 
@@ -141,14 +147,14 @@ def render(file_id: str):
     sl_failed_sla = res_metrics_odr[1] or 0
     mau_so_501 = res_metrics_odr[2] or 0          # (2) Mẫu số đơn PTC TT 501
     tu_so_dung_gio = res_metrics_odr[3] or 0      # (1a) Tử số Đúng giờ
-    tu_so_lan1_dung_gio = res_metrics_odr[4] or 0 # (1b) Tử số Đúng giờ lần 1
+    sl_lan1_dung_chi_tieu = res_metrics_odr[4] or 0 # (1b) Tử số Đúng giờ lần 1
     sl_ptc1 = res_metrics_odr[5] or 0
 
     # Tính toán tỷ lệ %
     pct_failed_sla = (sl_failed_sla / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc_dung_gio = (tu_so_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
-    pct_ptc1_dung_gio = (tu_so_lan1_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
+    pct_ptc1_dung_gio = (sl_lan1_dung_chi_tieu / mau_so_501 * 100) if mau_so_501 > 0 else 0
 
     # HIỂN THỊ 5 THẺ KPI (ĐÃ BỎ CHỮ XANH, TĂNG KÍCH THƯỚC CHỮ)
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
