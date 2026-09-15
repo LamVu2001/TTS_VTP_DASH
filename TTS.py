@@ -8,11 +8,11 @@ st.set_page_config(page_title="Tiktoks Dashboard", layout="wide")
 
 # Tiêu đề với màu đỏ đồng bộ chuẩn với thanh line phân cách
 st.markdown("""
-    <!-- Nhúng Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <h2 style="color: #c62828; display: flex; align-items: center; gap: 10px; font-weight: bold;">
-        <span><i class="fa-solid fa-store" style="color: #000000;"></i></span> 
+        <!-- Icon SVG chuẩn của TikTok / TikTok Shop -->
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style="display:inline-block; vertical-align:middle;">
+            <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001.002.001a2.895 2.895 0 0 1 3.144-4.53v-3.46a6.342 6.342 0 0 0-5.32 6.275 6.343 6.343 0 0 0 10.25 4.951 6.335 6.335 0 0 0 2.152-4.802V9.45a8.196 8.196 0 0 0 4.79 1.528V7.532a4.836 4.836 0 0 1-1.354-.846z"/>
+        </svg>
         TIKTOK SHOP DASHBOARD
     </h2>
 """, unsafe_allow_html=True)
