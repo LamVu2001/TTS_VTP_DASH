@@ -9,14 +9,14 @@ st.set_page_config(page_title="Shopee", layout="wide")
 # Tiêu đề với màu đỏ đồng bộ chuẩn với thanh line phân cách
 st.markdown("""
     <h2 style="color: #c62828; display: flex; align-items: center; gap: 14px; font-weight: bold; font-family: sans-serif;">
-        <!-- ICON SHOPEE ĐÚNG CHUẨN MẪU TỐI GIẢN -->
+        <!-- ICON SHOPEE CHUẨN MẪU GỐC -->
         <svg width="38" height="38" viewBox="0 0 512 512" style="display:inline-block; vertical-align:middle;">
-            <!-- Thân túi màu cam -->
-            <path d="M120,136 L392,136 C410,136 424,150 428,168 L472,392 C478,422 454,448 424,448 L88,448 C58,448 34,422 40,392 L84,168 C88,150 102,136 120,136 Z" fill="#EE4D2D"/>
-            <!-- Quai túi -->
-            <path d="M184,136 L184,92 C184,52 216,20 256,20 C296,20 328,52 328,92 L328,136" fill="none" stroke="#EE4D2D" stroke-width="28" stroke-linecap="round"/>
-            <!-- Chữ 'S' trắng tối giản ở giữa -->
-            <path d="M290,210 C265,190 230,185 200,195 C170,205 155,230 160,260 C165,290 195,305 235,320 C275,335 315,355 315,405 C315,450 270,480 215,480 C170,480 135,460 115,435" fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round"/>
+            <!-- Quai túi (Vẽ trước để nằm phía sau hoặc vừa vặn phía trên thân) -->
+            <path d="M176,140 L176,96 C176,52 212,16 256,16 C300,16 336,52 336,96 L336,140" fill="none" stroke="#EE4D2D" stroke-width="32" stroke-linecap="round"/>
+            <!-- Thân túi màu cam (Bo góc mềm) -->
+            <path d="M100,140 L412,140 C434,140 452,158 456,180 L492,396 C498,430 470,456 436,456 L76,456 C42,456 14,430 20,396 L56,180 C60,158 78,140 100,140 Z" fill="#EE4D2D"/>
+            <!-- Chữ 'S' trắng nét đều, mượt mà chính giữa túi -->
+            <path d="M310,210 C280,185 240,180 205,192 C170,204 152,235 156,268 C160,298 190,315 235,332 C280,349 315,370 315,415 C315,462 265,490 210,490 C160,490 120,465 100,435" fill="none" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round"/>
         </svg>
         SHOPEE DASHBOARD
     </h2>
