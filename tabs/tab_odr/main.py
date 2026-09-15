@@ -353,7 +353,7 @@ def render(file_id: str):
         except Exception as e:
             st.error(f"Lỗi tính toán biểu đồ: {e}")
 
-    # --- BIỂU ĐỒ PHẢI: TỶ TRỌNG CÁC KHÂU SAI (%) ---
+       # --- BIỂU ĐỒ PHẢI: TỶ TRỌNG CÁC KHÂU SAI (%) ---
        with c_odr_right:
         st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">TỶ TRỌNG CÁC KHÂU SAI</div>', unsafe_allow_html=True)
         try:
