@@ -354,85 +354,93 @@ def render(file_id: str):
             st.error(f"Lỗi tính toán biểu đồ: {e}")
 
     # --- BIỂU ĐỒ PHẢI: TỶ TRỌNG CÁC KHÂU SAI (%) ---
-    with c_odr_right:
-        st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">TỶ TRỌNG CÁC KHÂU SAI</div>', unsafe_allow_html=True)
-        try:
-            # Truy vấn đếm đơn Failed SLA theo cột KHAU_SAI
-            df_khau_sai = con.execute(f"""
-                WITH failed_orders AS (
-                    SELECT 
-                        COALESCE(CAST(KHAU_SAI AS VARCHAR), 'Chưa xác định') as khau_sai_name,
-                        COUNT(DISTINCT ma_phieugui) as sl_failed
-                    FROM orders
-                    WHERE {where_sql_odr} 
-                      AND tg_ptc IS NOT NULL
-                      AND danh_gia_giao_hang = 'Giao không đúng giờ'
-                    GROUP BY COALESCE(CAST(KHAU_SAI AS VARCHAR), 'Chưa xác định')
-                ),
-                total_failed AS (
-                    SELECT SUM(sl_failed) as total_sl FROM failed_orders
-                )
+   with c_odr_right:
+    st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">TỶ TRỌNG CÁC KHÂU SAI</div>', unsafe_allow_html=True)
+    try:
+        # Truy vấn đếm đơn Failed SLA theo cột KHAU_SAI
+        df_khau_sai = con.execute(f"""
+            WITH clean_orders AS (
                 SELECT 
-                    f.khau_sai_name,
-                    f.sl_failed,
-                    ROUND(f.sl_failed * 100.0 / NULLIF(t.total_sl, 0), 2) as ty_le_pct
-                FROM failed_orders f, total_failed t
-                WHERE f.khau_sai_name IS NOT NULL AND f.khau_sai_name != ''
-                ORDER BY f.sl_failed ASC
-            """).fetchdf()
+                    ma_phieugui,
+                    CASE 
+                        WHEN KHAU_SAI IS NULL OR TRIM(CAST(KHAU_SAI AS VARCHAR)) = '' THEN 'Chưa xác định'
+                        ELSE TRIM(CAST(KHAU_SAI AS VARCHAR))
+                    END as khau_sai_name
+                FROM orders
+                WHERE {where_sql_odr} 
+                  AND tg_ptc IS NOT NULL
+                  AND danh_gia_giao_hang = 'Giao không đúng giờ'
+            ),
+            failed_orders AS (
+                SELECT 
+                    khau_sai_name,
+                    COUNT(DISTINCT ma_phieugui) as sl_failed
+                FROM clean_orders
+                GROUP BY khau_sai_name
+            ),
+            total_failed AS (
+                SELECT SUM(sl_failed) as total_sl FROM failed_orders
+            )
+            SELECT 
+                f.khau_sai_name,
+                f.sl_failed,
+                ROUND(f.sl_failed * 100.0 / NULLIF(t.total_sl, 0), 2) as ty_le_pct
+            FROM failed_orders f, total_failed t
+            ORDER BY f.sl_failed ASC
+        """).fetchdf()
 
-            if len(df_khau_sai) > 0:
-                fig_khau_sai = px.bar(
-                    df_khau_sai,
-                    x="ty_le_pct",
-                    y="khau_sai_name",
-                    orientation="h",
-                    text=df_khau_sai["ty_le_pct"].apply(lambda x: f"{x:.2f}%"),
-                )
+        if len(df_khau_sai) > 0:
+            fig_khau_sai = px.bar(
+                df_khau_sai,
+                x="ty_le_pct",
+                y="khau_sai_name",
+                orientation="h",
+                text=df_khau_sai["ty_le_pct"].apply(lambda x: f"{x:.2f}%"),
+            )
 
-                fig_khau_sai.update_traces(
-                    marker_color="#c62828",
-                    textposition="outside",
-                    textfont=dict(
-                        size=11, color="#111111", family="Arial Black"
-                    ),
-                )
+            fig_khau_sai.update_traces(
+                marker_color="#c62828",
+                textposition="outside",
+                textfont=dict(
+                    size=11, color="#111111", family="Arial Black"
+                ),
+            )
 
-                max_pct = (
-                    df_khau_sai["ty_le_pct"].max()
-                    if not df_khau_sai.empty
-                    else 100
-                )
+            max_pct = (
+                df_khau_sai["ty_le_pct"].max()
+                if not df_khau_sai.empty
+                else 100
+            )
 
-                fig_khau_sai.update_layout(
-                    height=410,
-                    margin=dict(l=10, r=45, t=35, b=10),
-                    xaxis_title=None,
-                    yaxis_title=None,
-                    plot_bgcolor="#ffffff",
-                    xaxis=dict(
-                        showgrid=False,
-                        showticklabels=False,
-                        range=[0, max_pct * 1.25],
-                    ),
-                    yaxis=dict(
-                        showgrid=False,
-                        tickfont=dict(size=12, color="#111111"),
-                    ),
-                )
+            fig_khau_sai.update_layout(
+                height=410,
+                margin=dict(l=10, r=45, t=35, b=10),
+                xaxis_title=None,
+                yaxis_title=None,
+                plot_bgcolor="#ffffff",
+                xaxis=dict(
+                    showgrid=False,
+                    showticklabels=False,
+                    range=[0, max_pct * 1.25],
+                ),
+                yaxis=dict(
+                    showgrid=False,
+                    tickfont=dict(size=12, color="#111111"),
+                ),
+            )
 
-                st.plotly_chart(
-                    fig_khau_sai,
-                    use_container_width=True,
-                    config={"displayModeBar": False},
-                )
-            else:
-                st.info(
-                    "Không có dữ liệu khâu sai cho các đơn Failed SLA trong khoảng thời gian đã chọn."
-                )
-        except Exception as e:
-            st.error(f"Lỗi tính toán biểu đồ khâu sai: {e}")
-    st.divider()
+            st.plotly_chart(
+                fig_khau_sai,
+                use_container_width=True,
+                config={"displayModeBar": False},
+            )
+        else:
+            st.info(
+                "Không có dữ liệu khâu sai cho các đơn Failed SLA trong khoảng thời gian đã chọn."
+            )
+    except Exception as e:
+        st.error(f"Lỗi tính toán biểu đồ khâu sai: {e}")
+st.divider()
 
     # 6. BẢNG TƯƠNG TÁC TỈNH PHÁT / BƯU CỤC PHÁT
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">DANH SÁCH CHI NHÁNH & BƯU CỤC PHÁT</div>', unsafe_allow_html=True)
