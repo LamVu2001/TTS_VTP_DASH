@@ -353,8 +353,8 @@ def render(file_id: str):
         except Exception as e:
             st.error(f"Lỗi tính toán biểu đồ: {e}")
 
-       # --- BIỂU ĐỒ PHẢI: TỶ TRỌNG CÁC KHÂU SAI (%) ---
-       with c_odr_right:
+    # --- BIỂU ĐỒ PHẢI: TỶ TRỌNG CÁC KHÂU SAI (%) ---
+    with c_odr_right:
         st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">TỶ TRỌNG CÁC KHÂU SAI</div>', unsafe_allow_html=True)
         try:
             # Truy vấn đếm đơn Failed SLA theo cột KHAU_SAI
@@ -388,7 +388,7 @@ def render(file_id: str):
                 FROM failed_orders f, total_failed t
                 ORDER BY f.sl_failed ASC
             """).fetchdf()
-    
+
             if len(df_khau_sai) > 0:
                 fig_khau_sai = px.bar(
                     df_khau_sai,
@@ -397,7 +397,7 @@ def render(file_id: str):
                     orientation="h",
                     text=df_khau_sai["ty_le_pct"].apply(lambda x: f"{x:.2f}%"),
                 )
-    
+
                 fig_khau_sai.update_traces(
                     marker_color="#c62828",
                     textposition="outside",
@@ -405,13 +405,13 @@ def render(file_id: str):
                         size=11, color="#111111", family="Arial Black"
                     ),
                 )
-    
+
                 max_pct = (
                     df_khau_sai["ty_le_pct"].max()
                     if not df_khau_sai.empty
                     else 100
                 )
-    
+
                 fig_khau_sai.update_layout(
                     height=410,
                     margin=dict(l=10, r=45, t=35, b=10),
@@ -428,7 +428,7 @@ def render(file_id: str):
                         tickfont=dict(size=12, color="#111111"),
                     ),
                 )
-    
+
                 st.plotly_chart(
                     fig_khau_sai,
                     use_container_width=True,
@@ -440,8 +440,9 @@ def render(file_id: str):
                 )
         except Exception as e:
             st.error(f"Lỗi tính toán biểu đồ khâu sai: {e}")
-    st.divider()
 
+    st.divider()
+    
     # 6. BẢNG TƯƠNG TÁC TỈNH PHÁT / BƯU CỤC PHÁT
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">DANH SÁCH CHI NHÁNH & BƯU CỤC PHÁT</div>', unsafe_allow_html=True)
 
