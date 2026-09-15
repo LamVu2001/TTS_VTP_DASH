@@ -33,8 +33,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ID File Data
-TTS_PHAT_FILE_ID = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"
-DOANHTHU_FILE_ID = "1BCn1CH_VNWMslHxe1MQ4q9F2bJhbhY0o"  # Điền File ID của dữ liệu doanh thu nếu dùng riêng
+TTS_PHAT_FILE_ID = "19WK4CnUH70ftLi1bwbAB-LwMTGUDs19P"
+DOANHTHU_FILE_ID = "19WK4CnUH70ftLi1bwbAB-LwMTGUDs19P"  # Điền File ID của dữ liệu doanh thu nếu dùng riêng
 TTS_THU_FILE_ID = "1xEEvCjDTBp-GihkUiBTEygM_7Bwm71ZC" 
 
 # Khai báo 2 tab
