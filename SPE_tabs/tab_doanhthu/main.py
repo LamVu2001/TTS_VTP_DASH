@@ -5,13 +5,13 @@ import plotly.graph_objects as go
 import pandas as pd
 from datetime import date, datetime  # <-- THÊM DÒNG NÀY VÀO ĐẦU FILE
 
-from data_loader import get_connection
+from data_loader import get_spe_odr_connection
 
 
 def render(file_id=None):
     # Lấy kết nối DuckDB dùng chung
     try:
-        con = get_connection(file_id)
+        con = get_spe_odr_connection(file_id)
     except Exception as e:
         st.error(f"Lỗi kết nối cơ sở dữ liệu: {e}")
         return
