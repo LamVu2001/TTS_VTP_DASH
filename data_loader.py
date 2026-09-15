@@ -94,7 +94,7 @@ def get_spe_opr_connection(file_id: str = "1xEEvCjDTBp-GihkUiBTEygM_7Bwm71ZC"):
 
 @st.cache_resource
 def get_spe_odr_connection(file_id: str = "19WK4CnUH70ftLi1bwbAB-LwMTGUDs19P"):
-     """
+    """
     Hàm kết nối DuckDB dùng chung cho tất cả các Tab (ODR, Doanh Thu,...).
     Tự động tải dữ liệu Parquet từ Google Drive nếu chưa có dưới local.
     """
@@ -127,3 +127,4 @@ def get_spe_odr_connection(file_id: str = "19WK4CnUH70ftLi1bwbAB-LwMTGUDs19P"):
     """)
     
     return con
+
