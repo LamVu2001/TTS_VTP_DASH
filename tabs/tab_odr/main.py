@@ -359,15 +359,24 @@ def render(file_id: str):
         try:
             # Truy vấn đếm đơn Failed SLA theo cột KHAU_SAI
             df_khau_sai = con.execute(f"""
-                WITH failed_orders AS (
+                WITH clean_orders AS (
                     SELECT 
-                        COALESCE(CAST(KHAU_SAI AS VARCHAR), 'Chưa xác định') as khau_sai_name,
-                        COUNT(DISTINCT ma_phieugui) as sl_failed
+                        ma_phieugui,
+                        CASE 
+                            WHEN KHAU_SAI IS NULL OR TRIM(CAST(KHAU_SAI AS VARCHAR)) = '' THEN 'Chưa xác định'
+                            ELSE TRIM(CAST(KHAU_SAI AS VARCHAR))
+                        END as khau_sai_name
                     FROM orders
                     WHERE {where_sql_odr} 
                       AND tg_ptc IS NOT NULL
                       AND danh_gia_giao_hang = 'Giao không đúng giờ'
-                    GROUP BY COALESCE(CAST(KHAU_SAI AS VARCHAR), 'Chưa xác định')
+                ),
+                failed_orders AS (
+                    SELECT 
+                        khau_sai_name,
+                        COUNT(DISTINCT ma_phieugui) as sl_failed
+                    FROM clean_orders
+                    GROUP BY khau_sai_name
                 ),
                 total_failed AS (
                     SELECT SUM(sl_failed) as total_sl FROM failed_orders
@@ -377,7 +386,6 @@ def render(file_id: str):
                     f.sl_failed,
                     ROUND(f.sl_failed * 100.0 / NULLIF(t.total_sl, 0), 2) as ty_le_pct
                 FROM failed_orders f, total_failed t
-                WHERE f.khau_sai_name IS NOT NULL AND f.khau_sai_name != ''
                 ORDER BY f.sl_failed ASC
             """).fetchdf()
 
@@ -432,8 +440,9 @@ def render(file_id: str):
                 )
         except Exception as e:
             st.error(f"Lỗi tính toán biểu đồ khâu sai: {e}")
-    st.divider()
 
+    st.divider()
+    
     # 6. BẢNG TƯƠNG TÁC TỈNH PHÁT / BƯU CỤC PHÁT
     st.markdown('<div style="font-size:20px; font-weight:bold; color:#111; border-left:4px solid #c62828; padding-left:8px; margin-top:5px; margin-bottom:8px;">DANH SÁCH CHI NHÁNH & BƯU CỤC PHÁT</div>', unsafe_allow_html=True)
 
