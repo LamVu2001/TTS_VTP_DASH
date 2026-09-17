@@ -98,37 +98,31 @@ def render(file_id: str):
         st.multiselect("LOẠI ĐƠN (DV)", ld_opts, key="f_ld", placeholder="Tất cả")
     with of7:
         st.multiselect("TRỌNG LƯỢNG", tl_opts, key="f_tl", placeholder="Tất cả")
-
+        
     # 4. TỔNG HỢP TRUY VẤN KPI THEO NGÀY PHÁT THỰC TẾ (tg_ptc)
     res_metrics_odr = con.execute(f"""
         SELECT 
-            -- Tổng sản lượng phát trong khoảng tg_ptc
             COUNT(DISTINCT ma_phieugui) AS tong_sl_phat,
 
-            -- Sản lượng phát failed SLA (Giao không đúng giờ)
             COUNT(DISTINCT CASE 
                 WHEN danh_gia_giao_hang = 'Giao không đúng giờ' THEN ma_phieugui 
             END) AS sl_failed_sla,
 
-            -- (2) Mẫu số: Tổng đơn PTC TT 501 trong kỳ phát
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' THEN ma_phieugui 
             END) AS tong_ptc_501,
 
-            -- (1a) Tử số: Đơn PTC 501 trong SLA cam kết (Phát đúng giờ)
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' 
                  AND danh_gia_giao_hang = 'Giao đúng giờ' 
                 THEN ma_phieugui 
             END) AS sl_ptc_501_in_sla,
 
-               -- Tử số mới: Đơn có danhgia_time_gach_bp1 = 'Đúng chỉ tiêu'
             COUNT(DISTINCT CASE 
                 WHEN danhgia_time_gach_bp1 = 'Đúng chỉ tiêu' 
                 THEN ma_phieugui 
             END) AS sl_lan1_dung_chi_tieu,
             
-            -- (1b) Tử số: Đơn có TT 501, 505, 506, 507, 509 phát lần 1 trong SLA cam kết
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) IN ('501', '505', '506', '507', '509') 
                  AND PTC_1 = 1 
@@ -136,7 +130,6 @@ def render(file_id: str):
                 THEN ma_phieugui 
             END) AS sl_lan1_in_sla,
 
-            -- Đơn PTC Lần 1 chung trong kỳ
             COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1
 
         FROM orders 
