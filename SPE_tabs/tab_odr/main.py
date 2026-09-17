@@ -102,27 +102,22 @@ def render(file_id: str):
     # 4. TỔNG HỢP TRUY VẤN KPI THEO NGÀY PHÁT THỰC TẾ (tg_ptc)
     res_metrics_odr = con.execute(f"""
         SELECT 
-            -- Tổng sản lượng phát trong khoảng tg_ptc
             COUNT(DISTINCT ma_phieugui) AS tong_sl_phat,
 
-            -- Sản lượng phát failed SLA (Giao không đúng giờ)
             COUNT(DISTINCT CASE 
                 WHEN danh_gia_giao_hang = 'Giao không đúng giờ' THEN ma_phieugui 
             END) AS sl_failed_sla,
 
-            -- (2) Mẫu số: Tổng đơn PTC TT 501 trong kỳ phát
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' THEN ma_phieugui 
             END) AS tong_ptc_501,
 
-            -- (1a) Tử số: Đơn PTC 501 trong SLA cam kết (Phát đúng giờ)
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) = '501' 
                  AND danh_gia_giao_hang = 'Giao đúng giờ' 
                 THEN ma_phieugui 
             END) AS sl_ptc_501_in_sla,
             
-            -- (1b) Tử số: Đơn có TT 501, 505, 506, 507, 509 phát lần 1 trong SLA cam kết
             COUNT(DISTINCT CASE 
                 WHEN CAST(ma_trangthai AS VARCHAR) IN ('501', '505', '506', '507', '509') 
                  AND PTC_1 = 1 
@@ -130,13 +125,11 @@ def render(file_id: str):
                 THEN ma_phieugui 
             END) AS sl_lan1_in_sla,
 
-            -- Tử số mới: Đơn có danhgia_time_gach_bp1 = 'Đúng chỉ tiêu'
             COUNT(DISTINCT CASE 
                 WHEN danhgia_time_gach_bp1 = 'Đúng chỉ tiêu' 
                 THEN ma_phieugui 
             END) AS sl_lan1_dung_chi_tieu,
 
-            -- Đơn PTC Lần 1 chung trong kỳ
             COUNT(DISTINCT CASE WHEN PTC_1 = 1 THEN ma_phieugui END) AS sl_ptc1
 
         FROM orders 
@@ -145,10 +138,11 @@ def render(file_id: str):
 
     tong_sl_phat = res_metrics_odr[0] or 0
     sl_failed_sla = res_metrics_odr[1] or 0
-    mau_so_501 = res_metrics_odr[2] or 0          # (2) Mẫu số đơn PTC TT 501
-    tu_so_dung_gio = res_metrics_odr[3] or 0      # (1a) Tử số Đúng giờ
-    sl_lan1_dung_chi_tieu = res_metrics_odr[4] or 0 # (1b) Tử số Đúng giờ lần 1
-    sl_ptc1 = res_metrics_odr[5] or 0
+    mau_so_501 = res_metrics_odr[2] or 0          
+    tu_so_dung_gio = res_metrics_odr[3] or 0      
+    sl_lan1_in_sla = res_metrics_odr[4] or 0      
+    sl_lan1_dung_chi_tieu = res_metrics_odr[5] or 0 # Đúng index [5] của sl_lan1_dung_chi_tieu
+    sl_ptc1 = res_metrics_odr[6] or 0             # Đúng index [6] của sl_ptc1
 
     # Tính toán tỷ lệ %
     pct_failed_sla = (sl_failed_sla / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
@@ -195,7 +189,7 @@ def render(file_id: str):
         st.markdown(f'''
             <div class="metric-card" style="text-align: center; padding: 15px 10px;">
                 <div class="metric-title" style="font-size: 13px; font-weight: bold; color: #555555; margin-bottom: 8px;">TỶ LỆ PHÁT ĐÚNG GIỜ LẦN 1</div>
-                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{sl_lan1_dung_chi_tieu}%</div>
+                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{pct_ptc1_dung_gio:.1f}%</div>
             </div>
         ''', unsafe_allow_html=True)
         
