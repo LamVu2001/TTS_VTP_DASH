@@ -199,7 +199,7 @@ def render(file_id: str):
         st.markdown(f'''
             <div class="metric-card" style="text-align: center; padding: 15px 10px;">
                 <div class="metric-title" style="font-size: 13px; font-weight: bold; color: #555555; margin-bottom: 8px;">TỶ LỆ PHÁT ĐÚNG GIỜ LẦN 1</div>
-                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{pct_ptc1_dung_gio:.1f}%</div>
+                <div class="metric-value" style="font-size: 28px; font-weight: 800; color: #111111;">{pct_lan1_dung_chi_tieu :.1f}%</div>
             </div>
         ''', unsafe_allow_html=True)
         
