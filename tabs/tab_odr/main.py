@@ -121,6 +121,12 @@ def render(file_id: str):
                  AND danh_gia_giao_hang = 'Giao đúng giờ' 
                 THEN ma_phieugui 
             END) AS sl_ptc_501_in_sla,
+
+               -- Tử số mới: Đơn có danhgia_time_gach_bp1 = 'Đúng chỉ tiêu'
+            COUNT(DISTINCT CASE 
+                WHEN danhgia_time_gach_bp1 = 'Đúng chỉ tiêu' 
+                THEN ma_phieugui 
+            END) AS sl_lan1_dung_chi_tieu,
             
             -- (1b) Tử số: Đơn có TT 501, 505, 506, 507, 509 phát lần 1 trong SLA cam kết
             COUNT(DISTINCT CASE 
@@ -148,7 +154,7 @@ def render(file_id: str):
     pct_failed_sla = (sl_failed_sla / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc_dung_gio = (tu_so_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
-    pct_ptc1_dung_gio = (tu_so_lan1_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
+    pct_ptc1_dung_gio = (sl_lan1_dung_chi_tieu / mau_so_501 * 100) if mau_so_501 > 0 else 0
 
     # HIỂN THỊ 5 THẺ KPI (ĐÃ BỎ CHỮ XANH, TĂNG KÍCH THƯỚC CHỮ)
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
