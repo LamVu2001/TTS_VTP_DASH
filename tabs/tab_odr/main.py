@@ -145,16 +145,20 @@ def render(file_id: str):
 
     tong_sl_phat = res_metrics_odr[0] or 0
     sl_failed_sla = res_metrics_odr[1] or 0
-    mau_so_501 = res_metrics_odr[2] or 0          # (2) Mẫu số đơn PTC TT 501
-    tu_so_dung_gio = res_metrics_odr[3] or 0      # (1a) Tử số Đúng giờ
-    tu_so_lan1_dung_gio = res_metrics_odr[4] or 0 # (1b) Tử số Đúng giờ lần 1
-    sl_ptc1 = res_metrics_odr[5] or 0
+    mau_so_501 = res_metrics_odr[2] or 0          
+    tu_so_dung_gio = res_metrics_odr[3] or 0      
+    sl_lan1_dung_chi_tieu = res_metrics_odr[4] or 0 # Lấy đúng index [4] của cột mới
+    sl_lan1_in_sla = res_metrics_odr[5] or 0      
+    sl_ptc1 = res_metrics_odr[6] or 0             # Dịch chuyển index của sl_ptc1 thành [6]
 
     # Tính toán tỷ lệ %
     pct_failed_sla = (sl_failed_sla / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc1 = (sl_ptc1 / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
     pct_ptc_dung_gio = (tu_so_dung_gio / mau_so_501 * 100) if mau_so_501 > 0 else 0
-    pct_ptc1_dung_gio = (sl_lan1_dung_chi_tieu / mau_so_501 * 100) if mau_so_501 > 0 else 0
+    
+    # Sửa lại công thức mẫu số theo đúng ý bạn muốn (chia cho tổng đơn phát hoặc tổng 501)
+    # Ví dụ chia cho tổng sản lượng phát (tong_sl_phat):
+    pct_lan1_dung_chi_tieu = (sl_lan1_dung_chi_tieu / tong_sl_phat * 100) if tong_sl_phat > 0 else 0
 
     # HIỂN THỊ 5 THẺ KPI (ĐÃ BỎ CHỮ XANH, TĂNG KÍCH THƯỚC CHỮ)
     m_odr1, m_odr2, m_odr3, m_odr4, m_odr5 = st.columns(5)
